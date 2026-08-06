@@ -18,6 +18,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.google.android.material.color.DynamicColors
 import com.wireguard.android.backend.Backend
+import com.wireguard.android.backend.DispatchingBackend
 import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.WgQuickBackend
 import com.wireguard.android.configStore.FileConfigStore
@@ -62,24 +63,22 @@ class Application : android.app.Application() {
     }
 
     private suspend fun determineBackend(): Backend {
-        var backend: Backend? = null
+        var kernelBackend: Backend? = null
         if (UserKnobs.enableKernelModule.first() && WgQuickBackend.hasKernelSupport()) {
             try {
                 rootShell.start()
                 val wgQuickBackend = WgQuickBackend(applicationContext, rootShell, toolsInstaller)
                 wgQuickBackend.setMultipleTunnels(UserKnobs.multipleTunnels.first())
-                backend = wgQuickBackend
+                kernelBackend = wgQuickBackend
                 UserKnobs.multipleTunnels.onEach {
                     wgQuickBackend.setMultipleTunnels(it)
                 }.launchIn(coroutineScope)
             } catch (ignored: Exception) {
             }
         }
-        if (backend == null) {
-            backend = GoBackend(applicationContext)
-            GoBackend.setAlwaysOnCallback { get().applicationScope.launch { get().tunnelManager.restoreState(true) } }
-        }
-        return backend
+        val goBackend = GoBackend(applicationContext)
+        GoBackend.setAlwaysOnCallback { get().applicationScope.launch { get().tunnelManager.restoreState(true) } }
+        return DispatchingBackend(goBackend, kernelBackend)
     }
 
     override fun onCreate() {

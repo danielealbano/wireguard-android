@@ -73,6 +73,7 @@
     <string name="bad_config_explanation_pka">: Must be positive and no more than 65535</string>
     <string name="bad_config_explanation_positive_number">: Must be positive</string>
     <string name="bad_config_explanation_udp_port">: Must be a valid UDP port number</string>
+    <string name="bad_config_reason_forbidden_attribute">Attribute not allowed here</string>
     <string name="bad_config_reason_invalid_key">Invalid key</string>
     <string name="bad_config_reason_invalid_number">Invalid number</string>
     <string name="bad_config_reason_invalid_value">Invalid value</string>
@@ -260,4 +261,28 @@
     <string name="biometric_prompt_private_key_title">Authenticate to view private key</string>
     <string name="biometric_auth_error">Authentication failure</string>
     <string name="biometric_auth_error_reason">Authentication failure: %s</string>
+    <string name="ws_mode">WebSocket mode</string>
+    <string name="ws_mode_none">None (UDP)</string>
+    <string name="ws_mode_websocket">WebSocket</string>
+    <string name="ws_mode_wstunnel">wstunnel</string>
+    <string name="wstunnel_target">wstunnel target</string>
+    <string name="ws_bearer">WebSocket bearer</string>
+    <string name="ws_mask">Mask WebSocket frames</string>
+    <string name="ws_tls_ca">TLS CA certificate</string>
+    <string name="ws_tls_cert">TLS client certificate</string>
+    <string name="ws_tls_key">TLS client key</string>
+    <string name="ws_tls_insecure">Skip TLS verification</string>
+    <string name="ws_ping_interval">WebSocket ping interval (ms)</string>
+    <string name="ws_backoff_min">Reconnect backoff min (ms)</string>
+    <string name="ws_backoff_max">Reconnect backoff max (ms)</string>
+    <string name="ws_select_file">Select file</string>
+    <string name="ws_url">WebSocket URL</string>
+    <string name="transport">Transport</string>
+    <string name="ws_requires_userspace_error">WebSocket/wstunnel tunnels require the userspace backend</string>
+    <string name="ws_file_copy_error">Unable to import the selected file: %s</string>
+    <string-array name="ws_modes">
+        <item>@string/ws_mode_none</item>
+        <item>@string/ws_mode_websocket</item>
+        <item>@string/ws_mode_wstunnel</item>
+    </string-array>
 </resources>

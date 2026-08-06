@@ -5,7 +5,9 @@
 package com.wireguard.android.fragment
 
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.text.InputType
 import android.util.Log
 import android.view.LayoutInflater
@@ -18,6 +20,7 @@ import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.os.BundleCompat
 import androidx.core.view.MenuProvider
 import androidx.lifecycle.Lifecycle
@@ -32,8 +35,12 @@ import com.wireguard.android.util.AdminKnobs
 import com.wireguard.android.util.BiometricAuthenticator
 import com.wireguard.android.util.ErrorMessages
 import com.wireguard.android.viewmodel.ConfigProxy
+import com.wireguard.android.viewmodel.PeerProxy
 import com.wireguard.config.Config
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Fragment for editing a WireGuard configuration.
@@ -42,9 +49,77 @@ class TunnelEditorFragment : BaseFragment(), MenuProvider {
     private var haveShownKeys = false
     private var binding: TunnelEditorFragmentBinding? = null
     private var tunnel: ObservableTunnel? = null
+    private var pendingWsFilePeer: PeerProxy? = null
+    private var pendingWsFileKind: PeerProxy.WsFileKind? = null
+    private val wsFilePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val peer = pendingWsFilePeer
+        val kind = pendingWsFileKind
+        pendingWsFilePeer = null
+        pendingWsFileKind = null
+        if (uri == null || peer == null || kind == null) return@registerForActivityResult
+        lifecycleScope.launch { copyWsFile(uri, peer, kind) }
+    }
 
     private fun onConfigLoaded(config: Config) {
         binding?.config = ConfigProxy(config)
+    }
+
+    /**
+     * Invoked from the peer editor's TLS file rows: opens the system document picker, then copies
+     * the chosen file into app-internal storage and stores its path on the peer.
+     */
+    fun onSelectWsFile(peer: PeerProxy, kind: PeerProxy.WsFileKind) {
+        pendingWsFilePeer = peer
+        pendingWsFileKind = kind
+        try {
+            wsFilePicker.launch(arrayOf("*/*"))
+        } catch (e: Throwable) {
+            showWsFileError(e)
+        }
+    }
+
+    private suspend fun copyWsFile(uri: Uri, peer: PeerProxy, kind: PeerProxy.WsFileKind) {
+        try {
+            val ctx = requireContext()
+            val name = wsFileName(ctx, uri)
+            val path = withContext(Dispatchers.IO) {
+                val dir = File(ctx.filesDir, "ws-tls").apply { mkdirs() }
+                val dest = File(dir, name)
+                ctx.contentResolver.openInputStream(uri).use { input ->
+                    requireNotNull(input) { "Unable to open the selected file" }
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.absolutePath
+            }
+            peer.setWsFile(kind, path)
+        } catch (e: Throwable) {
+            showWsFileError(e)
+        }
+    }
+
+    private fun wsFileName(ctx: Context, uri: Uri): String {
+        var name: String? = null
+        ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0)
+                    name = cursor.getString(index)
+            }
+        }
+        val base = (name ?: uri.lastPathSegment ?: "ws-tls").substringAfterLast('/')
+        val sanitized = base.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        return sanitized.ifEmpty { "ws-tls" }
+    }
+
+    private fun showWsFileError(e: Throwable) {
+        val ctx = activity ?: Application.get()
+        val message = ctx.getString(R.string.ws_file_copy_error, ErrorMessages[e])
+        Log.e(TAG, message, e)
+        val binding = binding
+        if (binding != null)
+            Snackbar.make(binding.mainContainer, message, Snackbar.LENGTH_LONG).show()
+        else
+            Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
     }
 
     private fun onConfigSaved(savedTunnel: Tunnel, throwable: Throwable?) {

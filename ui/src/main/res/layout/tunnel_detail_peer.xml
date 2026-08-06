@@ -144,6 +144,78 @@
                 tools:text="192.168.0.1:51820" />
 
             <TextView
+                android:id="@+id/transport_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:labelFor="@+id/transport_text"
+                android:text="@string/transport"
+                android:visibility="@{!item.wsMode.isPresent() ? android.view.View.GONE : android.view.View.VISIBLE}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/endpoint_text" />
+
+            <TextView
+                android:id="@+id/transport_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/transport"
+                android:onClick="@{ClipboardUtils::copyTextView}"
+                android:text="@{item.uapiTransport}"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:visibility="@{!item.wsMode.isPresent() ? android.view.View.GONE : android.view.View.VISIBLE}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/transport_label"
+                tools:text="wstunnel" />
+
+            <TextView
+                android:id="@+id/ws_url_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:labelFor="@+id/ws_url_text"
+                android:text="@string/ws_url"
+                android:visibility="@{!item.wsUrl.isPresent() ? android.view.View.GONE : android.view.View.VISIBLE}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/transport_text" />
+
+            <TextView
+                android:id="@+id/ws_url_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/ws_url"
+                android:onClick="@{ClipboardUtils::copyTextView}"
+                android:text="@{item.wsUrl}"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:visibility="@{!item.wsUrl.isPresent() ? android.view.View.GONE : android.view.View.VISIBLE}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/ws_url_label"
+                tools:text="wss://vpn.example.com:8443/wg" />
+
+            <TextView
+                android:id="@+id/wstunnel_target_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:labelFor="@+id/wstunnel_target_text"
+                android:text="@string/wstunnel_target"
+                android:visibility="@{!item.wstunnelTarget.isPresent() ? android.view.View.GONE : android.view.View.VISIBLE}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/ws_url_text" />
+
+            <TextView
+                android:id="@+id/wstunnel_target_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/wstunnel_target"
+                android:onClick="@{ClipboardUtils::copyTextView}"
+                android:text="@{item.wstunnelTarget}"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:visibility="@{!item.wstunnelTarget.isPresent() ? android.view.View.GONE : android.view.View.VISIBLE}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/wstunnel_target_label"
+                tools:text="127.0.0.1:51820" />
+
+            <TextView
                 android:id="@+id/persistent_keepalive_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -152,7 +224,7 @@
                 android:text="@string/persistent_keepalive"
                 android:visibility="@{!item.persistentKeepalive.isPresent() ? android.view.View.GONE : android.view.View.VISIBLE}"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/endpoint_text" />
+                app:layout_constraintTop_toBottomOf="@+id/wstunnel_target_text" />
 
             <TextView
                 android:id="@+id/persistent_keepalive_text"
