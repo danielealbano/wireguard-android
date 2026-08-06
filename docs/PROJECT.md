@@ -16,9 +16,10 @@ so the same config runs on any device.
 > **This repository is a FORK** of upstream `WireGuard/wireguard-android` (`origin` =
 > `github.com/danielealbano/wireguard-android`). The extensions targeted here are captured in
 > [Roadmap](#roadmap): switching the userspace backend to the `danielealbano/wireguard-go` fork
-> (which adds a WebSocket transport) and exposing a WebSocket endpoint in the UI. Non-trivial work
-> proceeds via the development pipeline (`.claude/rules/development_pipeline.md`); these canonical
-> docs MUST be kept current as decisions land.
+> (which adds a per-peer WebSocket/wstunnel transport) and supporting that transport in the config
+> model and UI, byte-compatible with the sibling `wireguard-tools` fork's config surface. Non-trivial
+> work proceeds via the development pipeline (`.claude/rules/development_pipeline.md`); these
+> canonical docs MUST be kept current as decisions land.
 
 ---
 
@@ -168,6 +169,11 @@ downloads. macOS may need `flock(1)`.
   upstream `wireguard-go`/`wireguard-tools`. Adding any test harness is a tooling decision that
   requires explicit sign-off (see `.claude/rules/{kotlin,java,android}.md`).
 - Tests MUST NEVER require a rooted device, a live network, or the Play Store.
+- **On-device e2e (separate gate, not part of the JUnit suite):** `scripts/e2e-android.sh
+  <config.conf>` (ROADMAP — delivered by the WebSocket plan) drives a real device over adb —
+  debug-only intent surface, VPN consent via the `ACTIVATE_VPN` appop — to prove a config imports,
+  the tunnel comes up (handshake + traffic), and the VPN survives a Wi‑Fi→cellular switch. It is a
+  MANDATORY final gate for every plan (see `.claude/rules/project.md` → Testing).
 
 See `docs/ARCHITECTURE.md` for how the modules, backends, native toolchain, and data model fit
 together (with diagrams).
@@ -179,14 +185,32 @@ together (with diagrams).
 Planned extensions to this fork (each proceeds through the development pipeline; nothing here is
 implemented unless a plan under `docs/plans/` says so):
 
-1. **Switch the userspace backend to `danielealbano/wireguard-go`** (a sibling checkout). That fork
-   adds a **WebSocket transport (server + client mode)** so the tunnel can traverse UDP-hostile
-   networks. Integration is at `tunnel/tools/libwg-go/go.mod` (a `replace`/module change) — the
-   JNI/`VpnService` boundary is unchanged. *The fork's WebSocket support is still WIP.*
-2. **UI support for a WebSocket endpoint address**, so a peer endpoint can be a `ws(s)://…` URL when
-   UDP is blocked. This touches endpoint parsing/validation (`InetEndpoint` currently requires
-   `host:port` and forbids `/?#`) and the tunnel editor UI, and MUST stay interoperable with the wg
-   config format the backend expects.
+1. **Switch the userspace backend to `danielealbano/wireguard-go`** (a sibling checkout; the module
+   path stays `golang.zx2c4.com/wireguard`, consumed via a `go.mod` `replace` directive pinned to
+   the fork's **v1.3.0 UDP-parity contract** — commit-pinned to the tip of its parity branch until
+   the `v1.3.0` tag is published, then re-pinned to the tag). The fork adds a **per-peer
+   WebSocket/wstunnel transport**: every peer carries `transport=udp|websocket|wstunnel`,
+   `endpoint=` stays a resolved `ip:port` for every transport, and the WS layer travels in a
+   separate per-peer `ws_url` plus `ws_*` UAPI keys (contract: the fork's `docs/CONFIGURATION.md`
+   and `docs/ANDROID_INTEGRATION.md`). The JNI boundary **gains new surface**: the bind becomes
+   `conn.NewMultiplexBind` (UDP + WebSocket in one bind; the UDP data path is unchanged and
+   `wgGetSocketV4/V6` keep protecting the UDP sub-bind), every WebSocket dial is protected via a
+   Go→Java **per-dial `VpnService.protect(fd)` callback** (`conn.WithWSProtect`), and a
+   socket-bump export wrapping `device.BindUpdate()` is driven from a
+   `ConnectivityManager` network callback on network switches.
+2. **WebSocket/wstunnel config + UI support**, byte-compatible with the sibling `wireguard-tools`
+   fork's config surface: `[Peer] Endpoint` accepts a `ws(s)://host:port/path` URL,
+   `WSMode = websocket|wstunnel` selects the transport (`WSTunnelTarget` required for wstunnel),
+   plus `WSBearer`, `WSMask`, `WSTLSCA`/`WSTLSCert`/`WSTLSKey`, `WSTLSInsecure`, and
+   `WSPingInterval`/`WSBackoffMin`/`WSBackoffMax` — with the same transport-inference and
+   validation rules as the tools fork. The app infers `transport=`, resolves the URL host to the
+   routable `endpoint=ip:port` (the existing `InetEndpoint` DNS pre-resolution; `InetEndpoint`
+   itself keeps requiring `host:port`), and emits `ws_url=` separately. The tunnel editor exposes
+   ALL parameters (with a file selector for the TLS material paths). **Backend dispatch becomes
+   per-tunnel:** a config containing any websocket/wstunnel peer always runs on `GoBackend`; a
+   pure-UDP config keeps the classic kernel-vs-userspace selection; `WgQuickBackend` fails fast
+   with a specific `BackendException` on a WS config (the `wireguard-tools` submodule stays on
+   upstream — the kernel path never carries WS).
 3. **CI + signed release automation** (GitHub Actions): quality gates + a debug-APK artifact on
    push/PR; a **signed release APK + AAB** attached to a GitHub Release on `v*` tags, with the
    keystore supplied via CI secrets (`KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` /

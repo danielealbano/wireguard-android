@@ -277,34 +277,52 @@ Settings and state persist through **Preferences DataStore** (`UserKnobs`); mana
 
 ## 8. Roadmap Integration Points
 
-The planned extensions (see `docs/PROJECT.md` → Roadmap) map cleanly onto the existing boundaries —
-the WireGuard `VpnService`/JNI boundary and the config model do not change shape.
+The planned extensions (see `docs/PROJECT.md` → Roadmap) attach to the existing boundaries, but the
+WebSocket work **extends two of them**: the JNI contract gains new exports (per-dial protect
+callback, socket bump) and the config model gains the per-peer transport surface. The
+`VpnService` establishment flow and the UDP data path are unchanged.
 
 ```mermaid
 flowchart LR
     subgraph Now["Today"]
         GOMOD["libwg-go/go.mod : upstream wireguard-go"]
-        EP["InetEndpoint : host:port only"]
+        JNI6["JNI : 6 exports, one-shot protect"]
+        MODEL["config model : UDP endpoint only"]
         EDIT["TunnelEditorFragment"]
+        SEL["determineBackend : one app-wide backend"]
     end
     subgraph Goal["Roadmap"]
-        FORK["go.mod : danielealbano/wireguard-go (WebSocket)"]
-        WSEP["endpoint accepts ws(s) address"]
-        WSUI["editor : WebSocket endpoint field"]
+        FORK["go.mod replace : danielealbano/wireguard-go v1.3.0 parity contract"]
+        MPLEX["NewMultiplexBind + per-dial protect + socket bump"]
+        WSMODEL["Peer : transport, ws_url, WS keys (tools-fork surface)"]
+        WSUI["editor : all WS parameters"]
+        DISP["per-tunnel dispatch : WS peers on GoBackend, UDP classic"]
         CI["GitHub Actions : signed release APK + AAB"]
     end
 
     GOMOD -. replace directive .-> FORK
-    EP -. extend parsing/validation .-> WSEP
-    EDIT -. add field .-> WSUI
-    FORK --> WSEP
-    WSEP --> WSUI
+    JNI6 -. new exports .-> MPLEX
+    MODEL -. extend parsing and validation .-> WSMODEL
+    EDIT -. add fields .-> WSUI
+    SEL -. per-config dispatch .-> DISP
+    FORK --> MPLEX
+    WSMODEL --> WSUI
+    WSMODEL --> DISP
 ```
 
-- **Backend switch** happens entirely at `tunnel/tools/libwg-go/go.mod`; the JNI ABI, `GoBackend`,
-  and `VpnService` are unchanged.
-- **WebSocket endpoint in the UI** requires loosening `InetEndpoint` parsing (today it requires
-  `host:port` and forbids `/?#`) and adding an editor field, while keeping the serialized config
-  interoperable with what the (forked) backend expects.
+- **Backend switch** is a `go.mod` `replace` directive to `danielealbano/wireguard-go` (module path
+  unchanged; commit-pinned until the `v1.3.0` tag exists) **plus new JNI surface**: the shim
+  constructs `conn.NewMultiplexBind` (UDP + WebSocket in one bind), bridges a Go→Java per-dial
+  `VpnService.protect(fd)` upcall (`conn.WithWSProtect`), and adds a socket-bump export wrapping
+  `device.BindUpdate()` driven by a `ConnectivityManager` network callback. The six existing
+  exports remain; `wgGetSocketV4/V6` keep protecting the UDP sub-bind.
+- **WebSocket/wstunnel config + UI** adds the per-peer transport surface to the config model —
+  `Endpoint = ws(s)://…` + `WSMode` + the `WS*` keys, byte-compatible with the sibling
+  `wireguard-tools` fork, with the same inference/validation. `InetEndpoint` keeps requiring
+  `host:port` (it carries the routable, DNS-pre-resolved `endpoint=ip:port`); the URL travels
+  separately as `ws_url`. The editor exposes every parameter (file selector for TLS paths).
+- **Per-tunnel backend dispatch**: a config with any websocket/wstunnel peer always runs on
+  `GoBackend`; pure-UDP configs keep the classic kernel-vs-userspace selection; `WgQuickBackend`
+  fails fast on a WS config.
 - **CI + signing** is additive build/tooling (a signed release variant + a GitHub Actions workflow +
   a root Makefile), with no change to app behavior.
