@@ -9,13 +9,13 @@ built with Gradle + the Android Gradle Plugin and ships to the Play Store.
 
 > **STATUS: this is a FORK of upstream `WireGuard/wireguard-android`** (`origin` =
 > `github.com/danielealbano/wireguard-android`, `upstream` = `github.com/WireGuard/wireguard-android`).
-> The END GOALS are: (1) switch the userspace backend to the sibling **`danielealbano/wireguard-go`
-> fork**, which adds a **per-peer WebSocket/wstunnel transport**, and (2) support that transport in
-> the config model and UI (byte-compatible with the sibling `wireguard-tools` fork's config surface)
-> to bypass network paths that block UDP. Both are ROADMAP — the fork ships the transport (v1.2.0;
-> its **v1.3.0 UDP-parity UAPI contract** is pending tag); see `docs/PROJECT.md` → Roadmap. Non-trivial
-> work proceeds via the development pipeline per `development_pipeline.md`. The canonical docs MUST
-> be kept current as decisions land.
+> The userspace backend runs the sibling **`danielealbano/wireguard-go` fork** (v1.3.0, via a
+> `go.mod` `replace`), which adds a **per-peer WebSocket/wstunnel transport**, and the app supports
+> that transport in the config model and UI (byte-compatible with the sibling `wireguard-tools`
+> fork's config surface) to bypass network paths that block UDP — both DELIVERED (see
+> `docs/PROJECT.md` → Delivered). Remaining ROADMAP: CI + signed release. Non-trivial work proceeds
+> via the development pipeline per `development_pipeline.md`. The canonical docs MUST be kept current
+> as decisions land.
 
 ## MANDATORY: Read These First
 
@@ -59,17 +59,20 @@ Versions are authoritative in `gradle/libs.versions.toml`, `gradle.properties`, 
 
 ## Hard Project Invariants — ABSOLUTE RULES
 
-- **TWO BACKENDS ARE SACRED; DISPATCH IS PER-TUNNEL** *(agreed 2026-08-06; code is still
-  single-backend until the WebSocket plan lands)*. `GoBackend` (userspace, no root) and
+- **TWO BACKENDS ARE SACRED; DISPATCH IS PER-TUNNEL.** `GoBackend` (userspace, no root) and
   `WgQuickBackend` (kernel + root) MUST BOTH keep working — you MUST NOT remove, disable, or
-  degrade either. A config with ANY websocket/wstunnel peer MUST run on `GoBackend`; a pure-UDP
-  config keeps the classic selection (kernel module enabled AND present → `WgQuickBackend`, else
-  `GoBackend`). `WgQuickBackend` MUST fail fast (`BackendException`) on a WS config;
-  state/statistics route to the owning backend. The `wireguard-tools` submodule stays on upstream.
+  degrade either. `Application.determineBackend()` builds a `DispatchingBackend` wrapping both: a
+  config with ANY websocket/wstunnel peer (`Config.hasWebSocketPeers()`) MUST run on `GoBackend`; a
+  pure-UDP config keeps the classic selection (kernel module enabled AND present → `WgQuickBackend`,
+  else `GoBackend`). `WgQuickBackend` MUST fail fast
+  (`BackendException.Reason.WS_REQUIRES_USERSPACE_BACKEND`) on a WS bring-up; state/statistics route
+  to the owning backend. The `wireguard-tools` submodule stays on upstream.
 - **THE JNI CONTRACT MUST STAY IN SYNC.** The native methods on `GoBackend`
-  (`wgTurnOn`/`wgTurnOff`/`wgGetSocketV4`/`wgGetSocketV6`/`wgGetConfig`/`wgVersion`), their C
-  bindings in `tunnel/tools/libwg-go/jni.c`, and the Go `//export` functions in `api-android.go`
-  MUST always match by name and signature. Change one → change all three.
+  (`wgTurnOn`/`wgTurnOff`/`wgGetSocketV4`/`wgGetSocketV6`/`wgGetConfig`/`wgVersion`/
+  `wgSetFdProtector`/`wgBumpSockets`), their C bindings in `tunnel/tools/libwg-go/jni.c`, and the Go
+  `//export` functions in `api-android.go` MUST always match by name and signature. Change one →
+  change all three. NOTE: `wgSetFdProtector` is a `jni.c`/Java native (no Go export); the Go→C
+  protect bridge is the C `wgAndroidProtectFd(int)` upcall the WS bind calls via `conn.WithWSProtect`.
 - **THE NATIVE BUILD MUST NOT BREAK.** `libwg-go.so`, `libwg.so`, and `libwg-quick.so` are
   cross-compiled for every Android ABI via CMake + the NDK (Go through `libwg-go/Makefile`). A
   change MUST keep the full `externalNativeBuild` green for all ABIs.

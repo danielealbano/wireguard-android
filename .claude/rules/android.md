@@ -62,11 +62,17 @@ not a flavor.
     (`BIND_QUICK_SETTINGS_TILE`), and the boot/update receivers are the only intentionally-exported
     surfaces. `LogViewerActivity` and its `ExportedLogContentProvider` MUST stay `exported="false"`
     (the provider serves logs only via granted content URIs).
+  - **Debug only:** `com.wireguard.android.debug.TestReceiver` (the `ui/src/debug/` overlay, the
+    on-device e2e driver) is `exported="true"` but guarded by `android:permission="android.permission.DUMP"`
+    — a permission the adb shell holds and ordinary apps do not — and it exists ONLY in the `debug`
+    build type. You MUST NOT weaken that guard, add it to release/googleplay, or rely on
+    `getCallingUid()` (a system-dispatched broadcast does not carry the sender's uid).
 - You MUST request the **minimum permissions**. The current set (`CAMERA` for QR, `INTERNET`,
-  `RECEIVE_BOOT_COMPLETED`, `REQUEST_INSTALL_PACKAGES` for the non-Play updater,
-  `SYSTEM_ALERT_WINDOW` on SDK 34+ for the tile fallback, legacy `WRITE_EXTERNAL_STORAGE`
-  `maxSdkVersion=28`) is deliberate — do NOT add permissions without user approval, and remember the
-  `googleplay` build type strips `REQUEST_INSTALL_PACKAGES` via its manifest overlay.
+  `ACCESS_NETWORK_STATE` for the WebSocket network-switch bump, `RECEIVE_BOOT_COMPLETED`,
+  `REQUEST_INSTALL_PACKAGES` for the non-Play updater, `SYSTEM_ALERT_WINDOW` on SDK 34+ for the tile
+  fallback, legacy `WRITE_EXTERNAL_STORAGE` `maxSdkVersion=28`) is deliberate — do NOT add permissions
+  without user approval, and remember the `googleplay` build type strips `REQUEST_INSTALL_PACKAGES`
+  via its manifest overlay.
 - Managed-config (`@xml/app_restrictions` → `AdminKnobs`) and locale config
   (`generateLocaleConfig = true`) are part of the contract; keep them working.
 
@@ -128,7 +134,11 @@ Per `project.md`, CI is planned as GitHub Actions and MUST, when built, follow t
   There is **NO** instrumentation/`androidTest`, Robolectric, or Espresso. See `java.md`/`kotlin.md`.
 - Adding an instrumentation or Robolectric harness is a **tooling decision that REQUIRES the user** —
   do NOT introduce one unprompted.
-- Tests MUST NOT require a device, root, a live network, or the Play Store.
+- The JVM unit tests MUST NOT require a device, root, a live network, or the Play Store.
+- **On-device e2e (separate gate):** `scripts/e2e-android.sh` drives the debug build over adb (the
+  debug-only `TestReceiver`; VPN consent via the `ACTIVATE_VPN` appop) against a live
+  WireGuard/wstunnel server. It is NOT part of the JVM suite; it is the MANDATORY final gate of every
+  plan (`project.md` → Testing) and MUST fully pass before the flow is complete.
 
 ## 6) Quality Gates — ABSOLUTE RULES
 

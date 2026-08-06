@@ -277,52 +277,44 @@ Settings and state persist through **Preferences DataStore** (`UserKnobs`); mana
 
 ## 8. Roadmap Integration Points
 
-The planned extensions (see `docs/PROJECT.md` → Roadmap) attach to the existing boundaries, but the
-WebSocket work **extends two of them**: the JNI contract gains new exports (per-dial protect
-callback, socket bump) and the config model gains the per-peer transport surface. The
-`VpnService` establishment flow and the UDP data path are unchanged.
+The **WebSocket/wstunnel transport is delivered** (below); it extended two boundaries — the JNI
+contract gained new exports (per-dial protect callback, socket bump) and the config model gained the
+per-peer transport surface — while the `VpnService` establishment flow and the UDP data path stayed
+unchanged. The only pending extension is CI + signed release.
 
 ```mermaid
 flowchart LR
-    subgraph Now["Today"]
-        GOMOD["libwg-go/go.mod : upstream wireguard-go"]
-        JNI6["JNI : 6 exports, one-shot protect"]
-        MODEL["config model : UDP endpoint only"]
-        EDIT["TunnelEditorFragment"]
-        SEL["determineBackend : one app-wide backend"]
-    end
-    subgraph Goal["Roadmap"]
-        FORK["go.mod replace : danielealbano/wireguard-go v1.3.0 parity contract"]
+    subgraph Delivered["Delivered — WebSocket/wstunnel transport"]
+        FORK["go.mod replace : danielealbano/wireguard-go v1.3.0"]
         MPLEX["NewMultiplexBind + per-dial protect + socket bump"]
         WSMODEL["Peer : transport, ws_url, WS keys (tools-fork surface)"]
         WSUI["editor : all WS parameters"]
-        DISP["per-tunnel dispatch : WS peers on GoBackend, UDP classic"]
+        DISP["DispatchingBackend : WS peers on GoBackend, UDP classic"]
+    end
+    subgraph Pending["Roadmap"]
         CI["GitHub Actions : signed release APK + AAB"]
     end
 
-    GOMOD -. replace directive .-> FORK
-    JNI6 -. new exports .-> MPLEX
-    MODEL -. extend parsing and validation .-> WSMODEL
-    EDIT -. add fields .-> WSUI
-    SEL -. per-config dispatch .-> DISP
     FORK --> MPLEX
+    MPLEX --> WSMODEL
     WSMODEL --> WSUI
     WSMODEL --> DISP
 ```
 
-- **Backend switch** is a `go.mod` `replace` directive to `danielealbano/wireguard-go` (module path
-  unchanged; commit-pinned until the `v1.3.0` tag exists) **plus new JNI surface**: the shim
-  constructs `conn.NewMultiplexBind` (UDP + WebSocket in one bind), bridges a Go→Java per-dial
-  `VpnService.protect(fd)` upcall (`conn.WithWSProtect`), and adds a socket-bump export wrapping
-  `device.BindUpdate()` driven by a `ConnectivityManager` network callback. The six existing
-  exports remain; `wgGetSocketV4/V6` keep protecting the UDP sub-bind.
-- **WebSocket/wstunnel config + UI** adds the per-peer transport surface to the config model —
-  `Endpoint = ws(s)://…` + `WSMode` + the `WS*` keys, byte-compatible with the sibling
+- **Backend switch (delivered)** is a `go.mod` `replace` directive to `danielealbano/wireguard-go`
+  v1.3.0 (module path unchanged) **plus new JNI surface**: the shim constructs
+  `conn.NewMultiplexBind` (UDP + WebSocket in one bind), bridges a Go→Java per-dial
+  `VpnService.protect(fd)` upcall (`conn.WithWSProtect` / `wgSetFdProtector` / the C
+  `wgAndroidProtectFd`), and adds a `wgBumpSockets` export wrapping `device.BindUpdate()` driven by a
+  `ConnectivityManager` network callback. The six original exports remain; `wgGetSocketV4/V6` keep
+  protecting the UDP sub-bind.
+- **WebSocket/wstunnel config + UI (delivered)** adds the per-peer transport surface to the config
+  model — `Endpoint = ws(s)://…` + `WSMode` + the `WS*` keys, byte-compatible with the sibling
   `wireguard-tools` fork, with the same inference/validation. `InetEndpoint` keeps requiring
   `host:port` (it carries the routable, DNS-pre-resolved `endpoint=ip:port`); the URL travels
-  separately as `ws_url`. The editor exposes every parameter (file selector for TLS paths).
-- **Per-tunnel backend dispatch**: a config with any websocket/wstunnel peer always runs on
-  `GoBackend`; pure-UDP configs keep the classic kernel-vs-userspace selection; `WgQuickBackend`
-  fails fast on a WS config.
-- **CI + signing** is additive build/tooling (a signed release variant + a GitHub Actions workflow +
-  a root Makefile), with no change to app behavior.
+  separately as `ws_url`. The editor exposes every parameter (document picker for TLS paths).
+- **Per-tunnel backend dispatch (delivered)** via `DispatchingBackend`: a config with any
+  websocket/wstunnel peer always runs on `GoBackend`; pure-UDP configs keep the classic
+  kernel-vs-userspace selection; `WgQuickBackend` fails fast on a WS bring-up.
+- **CI + signing (pending)** is additive build/tooling (a signed release variant + a GitHub Actions
+  workflow + a root Makefile), with no change to app behavior.

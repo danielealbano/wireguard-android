@@ -14,12 +14,13 @@ The app [opportunistically uses the kernel implementation and falls back to the 
 so the same config runs on any device.
 
 > **This repository is a FORK** of upstream `WireGuard/wireguard-android` (`origin` =
-> `github.com/danielealbano/wireguard-android`). The extensions targeted here are captured in
-> [Roadmap](#roadmap): switching the userspace backend to the `danielealbano/wireguard-go` fork
-> (which adds a per-peer WebSocket/wstunnel transport) and supporting that transport in the config
-> model and UI, byte-compatible with the sibling `wireguard-tools` fork's config surface. Non-trivial
-> work proceeds via the development pipeline (`.claude/rules/development_pipeline.md`); these
-> canonical docs MUST be kept current as decisions land.
+> `github.com/danielealbano/wireguard-android`). Its userspace backend runs the
+> `danielealbano/wireguard-go` fork (v1.3.0) and the app supports that fork's **per-peer
+> WebSocket/wstunnel transport** in the config model and UI, byte-compatible with the sibling
+> `wireguard-tools` fork's config surface (see [Delivered](#delivered-websocketwstunnel-transport)).
+> Remaining work (CI + signed release) is in [Roadmap](#roadmap). Non-trivial work proceeds via the
+> development pipeline (`.claude/rules/development_pipeline.md`); these canonical docs MUST be kept
+> current as decisions land.
 
 ---
 
@@ -50,7 +51,7 @@ Versions are authoritative in `gradle/libs.versions.toml`, `gradle.properties`, 
 |---|---|---|
 | App language | **Kotlin** (`:ui`) | Provided by AGP **built-in Kotlin** (AGP 9.0+); no Kotlin Gradle plugin. |
 | Library language | **Java 17** (`:tunnel`) | Config/crypto/backends; published to Maven Central. |
-| Userspace core | **Go** cgo `c-shared` (`libwg-go`) | Wraps `golang.zx2c4.com/wireguard`; built into `libwg-go.so`. |
+| Userspace core | **Go** cgo `c-shared` (`libwg-go`) | Wraps `golang.zx2c4.com/wireguard` (replaced by `danielealbano/wireguard-go` v1.3.0); built into `libwg-go.so`. |
 | Native tools | **C** (`libwg`, `libwg-quick`) | `wireguard-tools` + `wg-quick`, built with `-Wall -Werror`. |
 | Build | **Gradle 9.3.1** + **AGP 9.1.0** | `compileSdk=36`, `minSdk=24`, JVM 17, Kotlin DSL, version catalog. |
 | Desugaring | `desugar_jdk_libs` | Core library desugaring in `:ui` (java.time etc. on minSdk 24). |
@@ -71,7 +72,8 @@ files, `logcat`) plus the updater's HTTPS fetch from `download.wireguard.com`.
 | Path | Responsibility |
 |---|---|
 | `ui/` | **`:ui` — the Kotlin application.** Activities, fragments, view-model proxies, DataBinding, DataStore knobs, updater, Quick tile, boot receiver. Composition root is `Application`. |
-| `ui/src/main/AndroidManifest.xml` | App components + permissions; `ui/src/googleplay/` is the `googleplay` build-type manifest overlay. |
+| `ui/src/main/AndroidManifest.xml` | App components + permissions; `ui/src/googleplay/` is the `googleplay` build-type manifest overlay; `ui/src/debug/` is the debug-only e2e `TestReceiver` overlay. |
+| `scripts/e2e-android.sh` | On-device e2e driver (adb + the debug `TestReceiver`); the mandatory final plan gate. |
 | `ui/proguard-android-optimize.txt` | R8 keep-rules for the minified release. |
 | `tunnel/` | **`:tunnel` — the reusable Java library** (published). |
 | `tunnel/src/main/java/com/wireguard/config/` | Immutable config model + parser (`Config`, `Interface`, `Peer`, `InetEndpoint`, `InetNetwork`, `Attribute`, exceptions). |
@@ -90,19 +92,31 @@ files, `logcat`) plus the updater's HTTPS fetch from `download.wireguard.com`.
 
 ## The Two Backends
 
-Both implement the `com.wireguard.android.backend.Backend` interface; the app selects one at runtime
-(`Application.determineBackend()`) and never talks to the native layer directly.
+Both implement the `com.wireguard.android.backend.Backend` interface; the app never talks to the
+native layer directly. `Application.determineBackend()` builds a **`DispatchingBackend`** wrapping
+`GoBackend` (always) and, when the kernel module is enabled and present, `WgQuickBackend`. Dispatch
+is **per tunnel**: a config with any websocket/wstunnel peer (`Config.hasWebSocketPeers()`) always
+runs on `GoBackend`; a pure-UDP config uses the kernel backend when available, else `GoBackend`.
+`WgQuickBackend` fails fast (`BackendException.Reason.WS_REQUIRES_USERSPACE_BACKEND`) if a WS config
+would be brought up on it. State and statistics follow the backend that owns the tunnel.
 
-### GoBackend (userspace, no root — the default)
+### GoBackend (userspace, no root)
 - Loads `libwg-go.so` (`SharedLibraryLoader`) and calls it over JNI:
-  `wgTurnOn`/`wgTurnOff`/`wgGetSocketV4`/`wgGetSocketV6`/`wgGetConfig`/`wgVersion`.
+  `wgTurnOn`/`wgTurnOff`/`wgGetSocketV4`/`wgGetSocketV6`/`wgGetConfig`/`wgVersion`/`wgSetFdProtector`/
+  `wgBumpSockets`.
 - Establishes an Android **`VpnService`** interface (addresses, DNS, routes, allowed/excluded apps,
   MTU, kill-switch), then hands the TUN fd + UAPI config string to `wgTurnOn`, and `protect()`s the
-  underlying sockets so tunnel traffic does not loop.
+  underlying UDP socket so tunnel traffic does not loop.
+- For websocket/wstunnel tunnels the userspace core dials TCP sockets that come and go, so `GoBackend`
+  registers a per-dial protect callback (`wgSetFdProtector` → the Go bind calls back into
+  `VpnService.protect(fd)` on every dial) and a `ConnectivityManager` network callback that bumps the
+  sockets (`wgBumpSockets` → `device.BindUpdate()`) on a network switch. Both are cleared/unregistered
+  on every teardown.
 - Supports **Always-On VPN** (system-started service + callback).
 
 ### WgQuickBackend (kernel module, root — opt-in)
-- Used only when `UserKnobs.enableKernelModule` is set AND `/sys/module/wireguard` exists.
+- Used only when `UserKnobs.enableKernelModule` is set AND `/sys/module/wireguard` exists, and only
+  for pure-UDP configs (it rejects WS configs).
 - Writes the config to a temp `.conf` and runs `wg-quick up/down` via a **root shell** (`RootShell`),
   installing the bundled `wg`/`wg-quick` tools first (`ToolsInstaller`). Reads stats via `wg show`.
 
@@ -120,6 +134,15 @@ externally immutable and built via `Builder`s. Two serializations are produced:
 form the Go backend feeds to `libwg-go`). Endpoints (`InetEndpoint`) are `host:port` and reject
 `/?#`; DNS resolution happens off the main thread.
 
+A `Peer` also carries the **websocket/wstunnel transport surface**, byte-compatible with the sibling
+`wireguard-tools` fork: `Endpoint` accepts a `ws(s)://host:port[/path]` URL (`WsUrl`), `WSMode`
+(`websocket`/`wstunnel`) selects the transport, and `WSTunnelTarget`/`WSBearer`/`WSMask`/`WSTLSCA`/
+`WSTLSCert`/`WSTLSKey`/`WSTLSInsecure`/`WSPingInterval`/`WSBackoffMin`/`WSBackoffMax` carry the rest.
+The URL host is pre-resolved to the routable `endpoint=ip:port` (`InetEndpoint` stays `host:port`
+only), the verbatim URL travels separately as `ws_url`, and `toWgUserspaceString()` emits the
+mandatory `transport=` on every peer plus the `ws_*` keys — the v1.3.0 UAPI contract of the
+`danielealbano/wireguard-go` fork (`replace` in `libwg-go/go.mod`).
+
 ### Persistence
 `FileConfigStore` keeps one `<name>.conf` per tunnel in the app's internal storage (`context.filesDir`).
 Runtime knobs (backend choice, dark theme, multi-tunnel, restore-on-boot, remote-control gate,
@@ -134,9 +157,12 @@ managed-device restrictions (`disable_config_export`) come from `AdminKnobs` (`@
   `Updater$AppUpdatedReceiver` (`MY_PACKAGE_REPLACED`), `TunnelManager$IntentReceiver` (remote
   up/down/refresh, guarded by the `CONTROL_TUNNELS` dangerous permission + a runtime knob).
 - **Service:** `QuickTileService` (Quick Settings tile). `GoBackend.VpnService` is the VPN service.
-- **Permissions:** `CAMERA`, `INTERNET`, `RECEIVE_BOOT_COMPLETED`, `REQUEST_INSTALL_PACKAGES`
-  (non-Play updater; removed in `googleplay`), `SYSTEM_ALERT_WINDOW` (SDK 34+ tile fallback), legacy
-  `WRITE_EXTERNAL_STORAGE` (`maxSdkVersion=28`), and the custom `CONTROL_TUNNELS` permission.
+- **Permissions:** `CAMERA`, `INTERNET`, `ACCESS_NETWORK_STATE` (WebSocket network-switch bump),
+  `RECEIVE_BOOT_COMPLETED`, `REQUEST_INSTALL_PACKAGES` (non-Play updater; removed in `googleplay`),
+  `SYSTEM_ALERT_WINDOW` (SDK 34+ tile fallback), legacy `WRITE_EXTERNAL_STORAGE` (`maxSdkVersion=28`),
+  and the custom `CONTROL_TUNNELS` permission.
+- **Debug only:** `com.wireguard.android.debug.TestReceiver` (a `ui/src/debug/` overlay, absent from
+  release/googleplay) drives the on-device e2e over adb, guarded by `android.permission.DUMP`.
 
 ---
 
@@ -180,38 +206,24 @@ together (with diagrams).
 
 ---
 
+## Delivered: WebSocket/wstunnel transport
+
+The **userspace backend now runs the `danielealbano/wireguard-go` fork** (module path unchanged,
+`replace … => github.com/danielealbano/wireguard-go v1.3.0` in `libwg-go/go.mod`), which adds the
+per-peer **websocket/wstunnel transport**. The details are described in their delivered sections
+above — *The Two Backends* (per-tunnel dispatch, the new JNI surface, the per-dial protect and
+network-switch bump) and *Config model* (the `WSMode`/`WS*` surface and the v1.3.0 UAPI keys) — and
+in `docs/ARCHITECTURE.md` § *Roadmap Integration Points*. The transport is byte-compatible with the
+sibling `wireguard-tools` fork's config surface, the editor exposes every parameter (with a document
+picker for the TLS material), and correctness is proven by the mandatory on-device e2e
+(`scripts/e2e-android.sh`).
+
 ## Roadmap
 
 Planned extensions to this fork (each proceeds through the development pipeline; nothing here is
 implemented unless a plan under `docs/plans/` says so):
 
-1. **Switch the userspace backend to `danielealbano/wireguard-go`** (a sibling checkout; the module
-   path stays `golang.zx2c4.com/wireguard`, consumed via a `go.mod` `replace` directive pinned to
-   the fork's **v1.3.0 UDP-parity contract** — commit-pinned to the tip of its parity branch until
-   the `v1.3.0` tag is published, then re-pinned to the tag). The fork adds a **per-peer
-   WebSocket/wstunnel transport**: every peer carries `transport=udp|websocket|wstunnel`,
-   `endpoint=` stays a resolved `ip:port` for every transport, and the WS layer travels in a
-   separate per-peer `ws_url` plus `ws_*` UAPI keys (contract: the fork's `docs/CONFIGURATION.md`
-   and `docs/ANDROID_INTEGRATION.md`). The JNI boundary **gains new surface**: the bind becomes
-   `conn.NewMultiplexBind` (UDP + WebSocket in one bind; the UDP data path is unchanged and
-   `wgGetSocketV4/V6` keep protecting the UDP sub-bind), every WebSocket dial is protected via a
-   Go→Java **per-dial `VpnService.protect(fd)` callback** (`conn.WithWSProtect`), and a
-   socket-bump export wrapping `device.BindUpdate()` is driven from a
-   `ConnectivityManager` network callback on network switches.
-2. **WebSocket/wstunnel config + UI support**, byte-compatible with the sibling `wireguard-tools`
-   fork's config surface: `[Peer] Endpoint` accepts a `ws(s)://host:port/path` URL,
-   `WSMode = websocket|wstunnel` selects the transport (`WSTunnelTarget` required for wstunnel),
-   plus `WSBearer`, `WSMask`, `WSTLSCA`/`WSTLSCert`/`WSTLSKey`, `WSTLSInsecure`, and
-   `WSPingInterval`/`WSBackoffMin`/`WSBackoffMax` — with the same transport-inference and
-   validation rules as the tools fork. The app infers `transport=`, resolves the URL host to the
-   routable `endpoint=ip:port` (the existing `InetEndpoint` DNS pre-resolution; `InetEndpoint`
-   itself keeps requiring `host:port`), and emits `ws_url=` separately. The tunnel editor exposes
-   ALL parameters (with a file selector for the TLS material paths). **Backend dispatch becomes
-   per-tunnel:** a config containing any websocket/wstunnel peer always runs on `GoBackend`; a
-   pure-UDP config keeps the classic kernel-vs-userspace selection; `WgQuickBackend` fails fast
-   with a specific `BackendException` on a WS config (the `wireguard-tools` submodule stays on
-   upstream — the kernel path never carries WS).
-3. **CI + signed release automation** (GitHub Actions): quality gates + a debug-APK artifact on
+1. **CI + signed release automation** (GitHub Actions): quality gates + a debug-APK artifact on
    push/PR; a **signed release APK + AAB** attached to a GitHub Release on `v*` tags, with the
    keystore supplied via CI secrets (`KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` /
    `KEY_PASSWORD`). A root **Makefile** wrapping `./gradlew` becomes the command surface.

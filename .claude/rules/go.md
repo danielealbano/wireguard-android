@@ -112,10 +112,13 @@ You MUST:
   in `libwg-go/Makefile`** (`GO_VERSION`), downloaded and patched with
   `goruntime-boottime-over-monotonic.diff`; the `go` directive in `go.mod` is the language floor.
   Both `go.mod` and `go.sum` MUST be committed.
-- **ROADMAP (per `project.md`):** switching the userspace core to the `danielealbano/wireguard-go`
-  fork will change the `golang.zx2c4.com/wireguard` requirement (e.g. a `replace` directive or module
-  path change). You MUST NOT do this until the user asks; when you do, `go mod tidy` MUST leave NO
-  diff and `govulncheck` MUST be clean.
+- **DELIVERED (per `project.md`):** the userspace core is the `danielealbano/wireguard-go` fork,
+  wired via `replace golang.zx2c4.com/wireguard => github.com/danielealbano/wireguard-go v1.3.0` in
+  `go.mod` (module path unchanged; `go` directive `1.26.5`). The shim builds `conn.NewMultiplexBind`
+  (UDP + WebSocket) and exports `wgSetFdProtector` (per-dial `VpnService.protect` bridge, via the C
+  `wgAndroidProtectFd` upcall) and `wgBumpSockets` (`device.BindUpdate`); the `tunnelHandles` map is
+  mutex-guarded. Any bump of the fork pin MUST leave `go mod tidy` with NO diff and `govulncheck`
+  clean.
 
 ## 3) Testing Rules — ABSOLUTE RULES
 
