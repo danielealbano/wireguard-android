@@ -78,7 +78,18 @@ public class BadConfigException extends Exception {
         PERSISTENT_KEEPALIVE("PersistentKeepalive"),
         PRE_SHARED_KEY("PresharedKey"),
         PRIVATE_KEY("PrivateKey"),
-        PUBLIC_KEY("PublicKey");
+        PUBLIC_KEY("PublicKey"),
+        WS_MODE("WSMode"),
+        WSTUNNEL_TARGET("WSTunnelTarget"),
+        WS_BEARER("WSBearer"),
+        WS_MASK("WSMask"),
+        WS_TLS_CA("WSTLSCA"),
+        WS_TLS_CERT("WSTLSCert"),
+        WS_TLS_KEY("WSTLSKey"),
+        WS_TLS_INSECURE("WSTLSInsecure"),
+        WS_PING_INTERVAL("WSPingInterval"),
+        WS_BACKOFF_MIN("WSBackoffMin"),
+        WS_BACKOFF_MAX("WSBackoffMax");
 
         private final String name;
 
@@ -92,6 +103,7 @@ public class BadConfigException extends Exception {
     }
 
     public enum Reason {
+        FORBIDDEN_ATTRIBUTE,
         INVALID_KEY,
         INVALID_NUMBER,
         INVALID_VALUE,

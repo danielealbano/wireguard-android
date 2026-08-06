@@ -138,6 +138,19 @@ public final class Config {
         return peers;
     }
 
+    /**
+     * Returns whether any peer uses the websocket or wstunnel transport (i.e. requires the
+     * userspace backend).
+     *
+     * @return {@code true} if at least one peer declares a WebSocket mode
+     */
+    public boolean hasWebSocketPeers() {
+        for (final Peer peer : peers)
+            if (peer.getWsMode().isPresent())
+                return true;
+        return false;
+    }
+
     @Override
     public int hashCode() {
         return 31 * interfaze.hashCode() + peers.hashCode();
