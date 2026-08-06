@@ -214,11 +214,15 @@ public class WsConfigTest {
 
     @Test
     public void Config_roundTrip_wsPeer() throws BadConfigException, IOException {
+        // KeyPair has no value equals(), so Config.equals() can never hold across two parses; assert
+        // the meaningful guarantee instead — the wg-quick serialization is idempotent.
         final Config config = parseConfig(
                 "Endpoint = wss://203.0.113.7:8443/v1\nWSMode = wstunnel\nWSTunnelTarget = 127.0.0.1:51820\nAllowedIPs = 192.168.178.0/24");
-        final Config reparsed = Config.parse(new ByteArrayInputStream(
-                config.toWgQuickString().getBytes(StandardCharsets.UTF_8)));
-        assertEquals("config round-trips", config, reparsed);
+        final String once = config.toWgQuickString();
+        final Config reparsed = Config.parse(new ByteArrayInputStream(once.getBytes(StandardCharsets.UTF_8)));
+        assertEquals("WebSocket config serialization round-trips", once, reparsed.toWgQuickString());
+        // The peer itself (no KeyPair) is value-equal across the round-trip.
+        assertEquals("peer round-trips", config.getPeers().get(0), reparsed.getPeers().get(0));
     }
 
     private static Config parseConfig(final String peerBody) throws BadConfigException, IOException {

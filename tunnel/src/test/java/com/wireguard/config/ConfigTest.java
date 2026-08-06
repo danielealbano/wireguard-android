@@ -62,8 +62,9 @@ public class ConfigTest {
                 + "AllowedIPs = 192.168.178.0/24\n";
         final Config config = Config.parse(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
         assertTrue("config has a WebSocket peer", config.hasWebSocketPeers());
-        final Config reparsed = Config.parse(new ByteArrayInputStream(
-                config.toWgQuickString().getBytes(StandardCharsets.UTF_8)));
-        assertEquals("WebSocket config round-trips through wg-quick form", config, reparsed);
+        // KeyPair has no value equals(), so compare the idempotent serialized form.
+        final String once = config.toWgQuickString();
+        final Config reparsed = Config.parse(new ByteArrayInputStream(once.getBytes(StandardCharsets.UTF_8)));
+        assertEquals("WebSocket config round-trips through wg-quick form", once, reparsed.toWgQuickString());
     }
 }
