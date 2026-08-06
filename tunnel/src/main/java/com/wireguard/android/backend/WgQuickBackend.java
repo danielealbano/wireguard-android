@@ -125,6 +125,11 @@ public final class WgQuickBackend implements Backend {
 
     @Override
     public State setState(final Tunnel tunnel, State state, @Nullable final Config config) throws Exception {
+        // Fail fast before any side effect (getState below installs/queries the root tools): the
+        // kernel backend cannot carry websocket/wstunnel peers. TOGGLE never reaches here for a WS
+        // config — the dispatcher resolves TOGGLE before routing — and DOWN never carries one up.
+        if (state == State.UP && config != null && config.hasWebSocketPeers())
+            throw new BackendException(Reason.WS_REQUIRES_USERSPACE_BACKEND);
         final State originalState = getState(tunnel);
         final Config originalConfig = runningConfigs.get(tunnel);
         final Map<Tunnel, Config> runningConfigsSnapshot = new HashMap<>(runningConfigs);

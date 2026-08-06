@@ -57,5 +57,7 @@ public final class BackendException extends Exception {
         TUN_CREATION_ERROR,
         GO_ACTIVATION_ERROR_CODE,
         DNS_RESOLUTION_FAILURE,
+        /** WebSocket/wstunnel peers require the userspace backend; the kernel backend cannot carry them. */
+        WS_REQUIRES_USERSPACE_BACKEND,
     }
 }
