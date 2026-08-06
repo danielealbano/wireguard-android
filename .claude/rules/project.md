@@ -145,7 +145,7 @@ underlying commands directly. Intended targets → underlying commands:
 | `make go-vulncheck` | `cd tunnel/tools/libwg-go && govulncheck ./...` |
 | `make publish` | `./gradlew :tunnel:publishReleasePublicationToSonatypeUploadRepository` |
 | `make mermaid-check` | validate all Mermaid blocks under `docs/` per `development_pipeline.md` §9 |
-| `make e2e` | `scripts/e2e-android.sh <config.conf>` (on-device e2e — script is ROADMAP, delivered by the WebSocket plan) |
+| `make e2e` | `scripts/e2e-android.sh <full-tunnel.conf> <split-tunnel.conf>` (on-device e2e) |
 | `make clean` | `./gradlew clean` |
 
 **Quality gates** (per `development_pipeline.md` §2, `android.md`, `go.md`, `kotlin.md`, `java.md`):
@@ -170,9 +170,9 @@ For PLAN flows, the **on-device e2e** (see Testing below) is an ADDITIONAL MANDA
 - The native code (`libwg-go`, C tools) has no in-repo tests; its correctness is validated by the
   build and by upstream `wireguard-go`/`wireguard-tools`.
 - **On-device e2e — MANDATORY PLAN GATE (ABSOLUTE):** EVERY plan's final ground-up verification
-  MUST run `scripts/e2e-android.sh <config.conf>` (script is ROADMAP until the WebSocket plan
-  delivers it) against a real device over adb + the live WireGuard/wstunnel server, and it MUST
-  FULLY PASS before the flow is considered complete. The script: baseline egress IP
+  MUST run `scripts/e2e-android.sh <full-tunnel.conf> <split-tunnel.conf>` against a real device over
+  adb + the live WireGuard/wstunnel server, and it MUST FULLY PASS before the flow is considered
+  complete. The script: baseline egress IP
   (`ifconfig.me`) → import config (debug-only intent surface; VPN consent pre-granted via the
   `ACTIVATE_VPN` appop) → tunnel up → handshake + rx/tx assertions → egress IP through the tunnel
   → Wi‑Fi off (switch to cellular) → tunnel still works and the egress IP is unchanged →

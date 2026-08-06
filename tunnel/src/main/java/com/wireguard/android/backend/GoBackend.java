@@ -52,7 +52,11 @@ public final class GoBackend implements Backend {
     private final Context context;
     @Nullable private Config currentConfig;
     @Nullable private Tunnel currentTunnel;
-    private int currentTunnelHandle = -1;
+    // volatile: read by maybeBump() on the ConnectivityManager callback thread while written by the
+    // tunnel-control / onDestroy paths.
+    private volatile int currentTunnelHandle = -1;
+    // networkCallback / lastNetwork / callbackRegisteredAt are all accessed under the GoBackend
+    // monitor (registerNetworkCallback / unregisterNetworkCallback / maybeBump are synchronized).
     @Nullable private ConnectivityManager.NetworkCallback networkCallback;
     @Nullable private Network lastNetwork;
     private long callbackRegisteredAt;
@@ -394,7 +398,7 @@ public final class GoBackend implements Backend {
         tunnel.onStateChange(state);
     }
 
-    private void registerNetworkCallback() {
+    private synchronized void registerNetworkCallback() {
         final ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null)
             return;
@@ -431,7 +435,7 @@ public final class GoBackend implements Backend {
             wgBumpSockets(currentTunnelHandle);
     }
 
-    private void unregisterNetworkCallback() {
+    private synchronized void unregisterNetworkCallback() {
         final ConnectivityManager.NetworkCallback cb = networkCallback;
         if (cb == null)
             return;

@@ -196,10 +196,10 @@ downloads. macOS may need `flock(1)`.
   requires explicit sign-off (see `.claude/rules/{kotlin,java,android}.md`).
 - Tests MUST NEVER require a rooted device, a live network, or the Play Store.
 - **On-device e2e (separate gate, not part of the JUnit suite):** `scripts/e2e-android.sh
-  <config.conf>` (ROADMAP — delivered by the WebSocket plan) drives a real device over adb —
-  debug-only intent surface, VPN consent via the `ACTIVATE_VPN` appop — to prove a config imports,
-  the tunnel comes up (handshake + traffic), and the VPN survives a Wi‑Fi→cellular switch. It is a
-  MANDATORY final gate for every plan (see `.claude/rules/project.md` → Testing).
+  <full-tunnel.conf> <split-tunnel.conf>` drives a real device over adb — debug-only intent surface,
+  VPN consent via the `ACTIVATE_VPN` appop — to prove a config imports, the tunnel comes up
+  (handshake + traffic), and the VPN survives a Wi‑Fi→cellular switch. It is a MANDATORY final gate
+  for every plan (see `.claude/rules/project.md` → Testing).
 
 See `docs/ARCHITECTURE.md` for how the modules, backends, native toolchain, and data model fit
 together (with diagrams).
