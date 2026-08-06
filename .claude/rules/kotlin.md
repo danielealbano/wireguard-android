@@ -39,9 +39,11 @@ library in `java.md`; the Go shim in `go.md`; project context in `project.md`.
   `TunnelManager`**, not surfaced through an accessor. New app-wide dependencies MUST be constructed
   there and exposed the same way — you MUST NOT scatter new global singletons or `object`-held
   mutable state, and you MUST NOT add a DI framework without user approval.
-- The **backend is chosen at runtime** in `Application.determineBackend()` (`WgQuickBackend` when the
-  kernel module is enabled AND present, else `GoBackend`). You MUST NOT change this selection logic
-  or bypass it; all tunnel control goes through `TunnelManager` → `Backend`.
+- The **backend is dispatched per tunnel config**: a config with ANY websocket/wstunnel peer MUST
+  use `GoBackend`; a pure-UDP config uses the classic `Application.determineBackend()` result
+  (`WgQuickBackend` when the kernel module is enabled AND present, else `GoBackend`). All tunnel
+  control goes through `TunnelManager` → `Backend` — you MUST NOT bypass it. *(Code is still
+  single-backend until the WebSocket plan lands.)*
 - Async-ready singletons use **`CompletableDeferred`** (`getBackend()`/`getTunnels()` suspend until
   ready). You MUST keep this non-blocking-init idiom; do NOT force these onto the main thread.
 

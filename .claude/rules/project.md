@@ -10,9 +10,10 @@ built with Gradle + the Android Gradle Plugin and ships to the Play Store.
 > **STATUS: this is a FORK of upstream `WireGuard/wireguard-android`** (`origin` =
 > `github.com/danielealbano/wireguard-android`, `upstream` = `github.com/WireGuard/wireguard-android`).
 > The END GOALS are: (1) switch the userspace backend to the sibling **`danielealbano/wireguard-go`
-> fork**, which adds a **WebSocket transport** (server + client mode), and (2) extend the **UI** so a
-> **WebSocket endpoint address** can be configured to bypass network paths that block UDP. Both are
-> ROADMAP — the fork's WebSocket support is still WIP; see `docs/PROJECT.md` → Roadmap. Non-trivial
+> fork**, which adds a **per-peer WebSocket/wstunnel transport**, and (2) support that transport in
+> the config model and UI (byte-compatible with the sibling `wireguard-tools` fork's config surface)
+> to bypass network paths that block UDP. Both are ROADMAP — the fork ships the transport (v1.2.0;
+> its **v1.3.0 UDP-parity UAPI contract** is pending tag); see `docs/PROJECT.md` → Roadmap. Non-trivial
 > work proceeds via the development pipeline per `development_pipeline.md`. The canonical docs MUST
 > be kept current as decisions land.
 
@@ -58,10 +59,13 @@ Versions are authoritative in `gradle/libs.versions.toml`, `gradle.properties`, 
 
 ## Hard Project Invariants — ABSOLUTE RULES
 
-- **TWO BACKENDS ARE SACRED.** `GoBackend` (userspace, no root, `libwg-go.so` + `VpnService`) and
-  `WgQuickBackend` (kernel module + `wg-quick`, requires root) MUST BOTH keep working. You MUST NOT
-  remove, disable, or degrade either backend, and MUST NOT change which one is selected at runtime,
-  unless the user EXPLICITLY asks.
+- **TWO BACKENDS ARE SACRED; DISPATCH IS PER-TUNNEL** *(agreed 2026-08-06; code is still
+  single-backend until the WebSocket plan lands)*. `GoBackend` (userspace, no root) and
+  `WgQuickBackend` (kernel + root) MUST BOTH keep working — you MUST NOT remove, disable, or
+  degrade either. A config with ANY websocket/wstunnel peer MUST run on `GoBackend`; a pure-UDP
+  config keeps the classic selection (kernel module enabled AND present → `WgQuickBackend`, else
+  `GoBackend`). `WgQuickBackend` MUST fail fast (`BackendException`) on a WS config;
+  state/statistics route to the owning backend. The `wireguard-tools` submodule stays on upstream.
 - **THE JNI CONTRACT MUST STAY IN SYNC.** The native methods on `GoBackend`
   (`wgTurnOn`/`wgTurnOff`/`wgGetSocketV4`/`wgGetSocketV6`/`wgGetConfig`/`wgVersion`), their C
   bindings in `tunnel/tools/libwg-go/jni.c`, and the Go `//export` functions in `api-android.go`
@@ -138,6 +142,7 @@ underlying commands directly. Intended targets → underlying commands:
 | `make go-vulncheck` | `cd tunnel/tools/libwg-go && govulncheck ./...` |
 | `make publish` | `./gradlew :tunnel:publishReleasePublicationToSonatypeUploadRepository` |
 | `make mermaid-check` | validate all Mermaid blocks under `docs/` per `development_pipeline.md` §9 |
+| `make e2e` | `scripts/e2e-android.sh <config.conf>` (on-device e2e — script is ROADMAP, delivered by the WebSocket plan) |
 | `make clean` | `./gradlew clean` |
 
 **Quality gates** (per `development_pipeline.md` §2, `android.md`, `go.md`, `kotlin.md`, `java.md`):
@@ -145,6 +150,7 @@ a clean **build** (`./gradlew assembleDebug`), **Android Lint** with ZERO errors
 documented `disable`/`warning` settings aside), the **`:tunnel` unit tests** passing, the **Go shim** clean
 (`go vet` / `golangci-lint run` / `go mod tidy` with NO `go.mod`/`go.sum` diff / `govulncheck`), and
 **Mermaid validation** (when Mermaid charts were touched) MUST ALL pass before any work is DONE.
+For PLAN flows, the **on-device e2e** (see Testing below) is an ADDITIONAL MANDATORY final gate.
 
 ---
 
@@ -157,9 +163,18 @@ documented `disable`/`warning` settings aside), the **`:tunnel` unit tests** pas
   Espresso, or Mockito. You MUST NOT assume a UI test harness exists; adding one is a tooling
   decision that requires the user (see `kotlin.md`).
 - Tests MUST NEVER require a rooted device, a live network, or a real Play Store — they run offline
-  on the JVM.
+  on the JVM. (The on-device e2e below is a SEPARATE gate, NOT part of the JUnit suite.)
 - The native code (`libwg-go`, C tools) has no in-repo tests; its correctness is validated by the
   build and by upstream `wireguard-go`/`wireguard-tools`.
+- **On-device e2e — MANDATORY PLAN GATE (ABSOLUTE):** EVERY plan's final ground-up verification
+  MUST run `scripts/e2e-android.sh <config.conf>` (script is ROADMAP until the WebSocket plan
+  delivers it) against a real device over adb + the live WireGuard/wstunnel server, and it MUST
+  FULLY PASS before the flow is considered complete. The script: baseline egress IP
+  (`ifconfig.me`) → import config (debug-only intent surface; VPN consent pre-granted via the
+  `ACTIVATE_VPN` appop) → tunnel up → handshake + rx/tx assertions → egress IP through the tunnel
+  → Wi‑Fi off (switch to cellular) → tunnel still works and the egress IP is unchanged →
+  `ping 192.168.178.1` through the tunnel → teardown. A failing or skipped e2e means the plan is
+  NOT done. ZERO exceptions.
 
 ---
 
