@@ -12,12 +12,16 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.databinding.BindingAdapter
 import androidx.databinding.DataBindingUtil
+import androidx.databinding.InverseBindingAdapter
+import androidx.databinding.InverseBindingListener
 import androidx.databinding.ObservableList
 import androidx.databinding.ViewDataBinding
 import androidx.databinding.adapters.ListenerUtil
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.textfield.TextInputLayout
 import com.wireguard.android.BR
 import com.wireguard.android.R
 import com.wireguard.android.databinding.ObservableKeyedRecyclerViewAdapter.RowConfigurationHandler
@@ -178,6 +182,47 @@ object BindingAdapters {
         } catch (_: Throwable) {
             0
         }
+    }
+
+    // The WebSocket-mode dropdown maps between the wire value ("" / websocket / wstunnel) stored on
+    // PeerProxy and the localized labels shown in the exposed dropdown.
+    private val WS_MODE_VALUES = arrayOf("", "websocket", "wstunnel")
+
+    private fun wsModeLabels(view: View): Array<String> = arrayOf(
+        view.context.getString(R.string.ws_mode_none),
+        view.context.getString(R.string.ws_mode_websocket),
+        view.context.getString(R.string.ws_mode_wstunnel)
+    )
+
+    @JvmStatic
+    @BindingAdapter("wsModeValue")
+    fun setWsModeValue(view: MaterialAutoCompleteTextView, value: String?) {
+        val labels = wsModeLabels(view)
+        val index = WS_MODE_VALUES.indexOf(value ?: "").let { if (it >= 0) it else 0 }
+        val label = labels[index]
+        if (view.text.toString() != label)
+            view.setText(label, false)
+    }
+
+    @JvmStatic
+    @InverseBindingAdapter(attribute = "wsModeValue", event = "wsModeValueAttrChanged")
+    fun getWsModeValue(view: MaterialAutoCompleteTextView): String {
+        val index = wsModeLabels(view).indexOf(view.text.toString())
+        return if (index >= 0) WS_MODE_VALUES[index] else ""
+    }
+
+    @JvmStatic
+    @BindingAdapter("wsModeValueAttrChanged")
+    fun setWsModeValueListener(view: MaterialAutoCompleteTextView, attrChange: InverseBindingListener?) {
+        if (attrChange == null)
+            return
+        view.setOnItemClickListener { _, _, _, _ -> attrChange.onChange() }
+    }
+
+    @JvmStatic
+    @BindingAdapter("endIconOnClick")
+    fun setEndIconOnClick(view: TextInputLayout, listener: View.OnClickListener?) {
+        view.setEndIconOnClickListener(listener)
     }
 
     @JvmStatic

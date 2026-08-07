@@ -22,6 +22,7 @@ import java.net.InetAddress
 
 object ErrorMessages {
     private val BCE_REASON_MAP = mapOf(
+        BadConfigException.Reason.FORBIDDEN_ATTRIBUTE to R.string.bad_config_reason_forbidden_attribute,
         BadConfigException.Reason.INVALID_KEY to R.string.bad_config_reason_invalid_key,
         BadConfigException.Reason.INVALID_NUMBER to R.string.bad_config_reason_invalid_number,
         BadConfigException.Reason.INVALID_VALUE to R.string.bad_config_reason_invalid_value,
@@ -39,7 +40,8 @@ object ErrorMessages {
         BackendException.Reason.UNABLE_TO_START_VPN to R.string.vpn_start_error,
         BackendException.Reason.TUN_CREATION_ERROR to R.string.tun_create_error,
         BackendException.Reason.GO_ACTIVATION_ERROR_CODE to R.string.tunnel_on_error,
-        BackendException.Reason.DNS_RESOLUTION_FAILURE to R.string.tunnel_dns_failure
+        BackendException.Reason.DNS_RESOLUTION_FAILURE to R.string.tunnel_dns_failure,
+        BackendException.Reason.WS_REQUIRES_USERSPACE_BACKEND to R.string.ws_requires_userspace_error
     )
     private val KFE_FORMAT_MAP = mapOf(
         Key.Format.BASE64 to R.string.key_length_explanation_base64,

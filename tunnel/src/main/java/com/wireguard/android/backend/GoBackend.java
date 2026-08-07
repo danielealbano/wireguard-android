@@ -7,8 +7,13 @@ package com.wireguard.android.backend;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import android.system.OsConstants;
 import android.util.Log;
 
@@ -47,7 +52,14 @@ public final class GoBackend implements Backend {
     private final Context context;
     @Nullable private Config currentConfig;
     @Nullable private Tunnel currentTunnel;
-    private int currentTunnelHandle = -1;
+    // volatile: read by maybeBump() on the ConnectivityManager callback thread while written by the
+    // tunnel-control / onDestroy paths.
+    private volatile int currentTunnelHandle = -1;
+    // networkCallback / lastNetwork / callbackRegisteredAt are all accessed under the GoBackend
+    // monitor (registerNetworkCallback / unregisterNetworkCallback / maybeBump are synchronized).
+    @Nullable private ConnectivityManager.NetworkCallback networkCallback;
+    @Nullable private Network lastNetwork;
+    private long callbackRegisteredAt;
 
     /**
      * Public constructor for GoBackend.
@@ -74,6 +86,10 @@ public final class GoBackend implements Backend {
     private static native int wgGetSocketV4(int handle);
 
     private static native int wgGetSocketV6(int handle);
+
+    private static native void wgBumpSockets(int handle);
+
+    private static native void wgSetFdProtector(@Nullable Object protector);
 
     private static native void wgTurnOff(int handle);
 
@@ -334,20 +350,34 @@ public final class GoBackend implements Backend {
             service.setUnderlyingNetworks(null);
 
             builder.setBlocking(true);
-            try (final ParcelFileDescriptor tun = builder.establish()) {
-                if (tun == null)
-                    throw new BackendException(Reason.TUN_CREATION_ERROR);
-                Log.d(TAG, "Go backend " + wgVersion());
-                currentTunnelHandle = wgTurnOn(tunnel.getName(), tun.detachFd(), goConfig);
+            // Register the per-dial WebSocket socket protector (invoked from the Go bind for every
+            // dialed WS socket) BEFORE turn-on; clear it if anything fails before the tunnel is up.
+            wgSetFdProtector(service);
+            try {
+                try (final ParcelFileDescriptor tun = builder.establish()) {
+                    if (tun == null)
+                        throw new BackendException(Reason.TUN_CREATION_ERROR);
+                    Log.d(TAG, "Go backend " + wgVersion());
+                    currentTunnelHandle = wgTurnOn(tunnel.getName(), tun.detachFd(), goConfig);
+                }
+                if (currentTunnelHandle < 0)
+                    throw new BackendException(Reason.GO_ACTIVATION_ERROR_CODE, currentTunnelHandle);
+
+                currentTunnel = tunnel;
+                currentConfig = config;
+
+                // The multiplex bind still exposes the UDP socket for the one-shot protect.
+                service.protect(wgGetSocketV4(currentTunnelHandle));
+                service.protect(wgGetSocketV6(currentTunnelHandle));
+
+                // WebSocket tunnels re-dial TCP sockets on every network switch; watch for changes
+                // so we can bump the bind (re-dial + re-pin). Not needed for pure-UDP tunnels.
+                if (config.hasWebSocketPeers())
+                    registerNetworkCallback();
+            } catch (final Exception e) {
+                wgSetFdProtector(null);
+                throw e;
             }
-            if (currentTunnelHandle < 0)
-                throw new BackendException(Reason.GO_ACTIVATION_ERROR_CODE, currentTunnelHandle);
-
-            currentTunnel = tunnel;
-            currentConfig = config;
-
-            service.protect(wgGetSocketV4(currentTunnelHandle));
-            service.protect(wgGetSocketV6(currentTunnelHandle));
         } else {
             if (currentTunnelHandle == -1) {
                 Log.w(TAG, "Tunnel already down");
@@ -357,13 +387,68 @@ public final class GoBackend implements Backend {
             currentTunnel = null;
             currentTunnelHandle = -1;
             currentConfig = null;
+            unregisterNetworkCallback();
             wgTurnOff(handleToClose);
+            wgSetFdProtector(null);
             try {
                 vpnService.get(0, TimeUnit.NANOSECONDS).stopSelf();
             } catch (final TimeoutException ignored) { }
         }
 
         tunnel.onStateChange(state);
+    }
+
+    private synchronized void registerNetworkCallback() {
+        final ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null)
+            return;
+        final NetworkRequest request = new NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build();
+        callbackRegisteredAt = SystemClock.elapsedRealtime();
+        lastNetwork = null;
+        final ConnectivityManager.NetworkCallback cb = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(final Network network) {
+                maybeBump(network);
+            }
+
+            @Override
+            public void onLost(final Network network) {
+                maybeBump(null);
+            }
+        };
+        networkCallback = cb;
+        cm.registerNetworkCallback(request, cb);
+    }
+
+    private synchronized void maybeBump(@Nullable final Network network) {
+        // registerNetworkCallback immediately replays already-available networks; ignore the first
+        // second so the just-established tunnel is not bumped on turn-on.
+        if (SystemClock.elapsedRealtime() - callbackRegisteredAt < 1000)
+            return;
+        if (network != null && network.equals(lastNetwork))
+            return;
+        lastNetwork = network;
+        if (currentTunnelHandle != -1)
+            wgBumpSockets(currentTunnelHandle);
+    }
+
+    private synchronized void unregisterNetworkCallback() {
+        final ConnectivityManager.NetworkCallback cb = networkCallback;
+        if (cb == null)
+            return;
+        networkCallback = null;
+        lastNetwork = null;
+        final ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm != null) {
+            try {
+                cm.unregisterNetworkCallback(cb);
+            } catch (final IllegalArgumentException ignored) {
+                // Already unregistered.
+            }
+        }
     }
 
     /**
@@ -395,8 +480,10 @@ public final class GoBackend implements Backend {
             if (owner != null) {
                 final Tunnel tunnel = owner.currentTunnel;
                 if (tunnel != null) {
+                    owner.unregisterNetworkCallback();
                     if (owner.currentTunnelHandle != -1)
                         wgTurnOff(owner.currentTunnelHandle);
+                    wgSetFdProtector(null);
                     owner.currentTunnel = null;
                     owner.currentTunnelHandle = -1;
                     owner.currentConfig = null;

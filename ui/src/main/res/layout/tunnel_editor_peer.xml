@@ -13,6 +13,8 @@
 
         <import type="com.wireguard.android.databinding.BindingAdapters" />
 
+        <import type="com.wireguard.android.viewmodel.PeerProxy.WsFileKind" />
+
         <variable
             name="collection"
             type="androidx.databinding.ObservableList&lt;com.wireguard.android.viewmodel.PeerProxy&gt;" />
@@ -161,6 +163,206 @@
                     android:text="@={item.endpoint}" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <LinearLayout
+                android:id="@+id/ws_section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="@{item.wsEndpoint || !item.wsMode.isEmpty() ? View.VISIBLE : View.GONE}"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/endpoint_label_layout">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_mode_label_layout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_mode">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/ws_mode_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none"
+                        app:simpleItems="@array/ws_modes"
+                        app:wsModeValue="@={item.wsMode}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/wstunnel_target_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/wstunnel_target"
+                    app:expandedHintEnabled="false">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/wstunnel_target_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="textNoSuggestions|textVisiblePassword"
+                        android:text="@={item.wstunnelTarget}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_bearer_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_bearer"
+                    app:expandedHintEnabled="false">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ws_bearer_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="textNoSuggestions|textPassword"
+                        android:text="@={item.wsBearer}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_tls_ca_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_tls_ca"
+                    app:expandedHintEnabled="false"
+                    app:endIconContentDescription="@string/ws_select_file"
+                    app:endIconDrawable="@drawable/ic_action_open"
+                    app:endIconMode="custom"
+                    app:endIconOnClick="@{(v) -> fragment.onSelectWsFile(item, WsFileKind.CA)}">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ws_tls_ca_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="textNoSuggestions|textVisiblePassword"
+                        android:text="@={item.wsTlsCa}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_tls_cert_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_tls_cert"
+                    app:expandedHintEnabled="false"
+                    app:endIconContentDescription="@string/ws_select_file"
+                    app:endIconDrawable="@drawable/ic_action_open"
+                    app:endIconMode="custom"
+                    app:endIconOnClick="@{(v) -> fragment.onSelectWsFile(item, WsFileKind.CERT)}">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ws_tls_cert_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="textNoSuggestions|textVisiblePassword"
+                        android:text="@={item.wsTlsCert}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_tls_key_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_tls_key"
+                    app:expandedHintEnabled="false"
+                    app:endIconContentDescription="@string/ws_select_file"
+                    app:endIconDrawable="@drawable/ic_action_open"
+                    app:endIconMode="custom"
+                    app:endIconOnClick="@{(v) -> fragment.onSelectWsFile(item, WsFileKind.KEY)}">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ws_tls_key_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="textNoSuggestions|textVisiblePassword"
+                        android:text="@={item.wsTlsKey}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_ping_interval_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_ping_interval"
+                    app:expandedHintEnabled="false">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ws_ping_interval_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="number"
+                        android:text="@={item.wsPingInterval}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_backoff_min_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_backoff_min"
+                    app:expandedHintEnabled="false">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ws_backoff_min_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="number"
+                        android:text="@={item.wsBackoffMin}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/ws_backoff_max_label_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:hint="@string/ws_backoff_max"
+                    app:expandedHintEnabled="false">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ws_backoff_max_text"
+                        android:hint="@string/hint_optional"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="number"
+                        android:text="@={item.wsBackoffMax}" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/ws_mask_switch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="8dp"
+                    android:checked="@={item.wsMask}"
+                    android:text="@string/ws_mask" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/ws_tls_insecure_switch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="8dp"
+                    android:checked="@={item.wsTlsInsecure}"
+                    android:text="@string/ws_tls_insecure" />
+            </LinearLayout>
+
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/allowed_ips_label_layout"
                 android:layout_width="match_parent"
@@ -169,7 +371,7 @@
                 android:hint="@string/allowed_ips"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/endpoint_label_layout">
+                app:layout_constraintTop_toBottomOf="@id/ws_section">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/allowed_ips_text"

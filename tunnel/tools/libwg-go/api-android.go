@@ -7,6 +7,7 @@ package main
 
 // #cgo LDFLAGS: -llog
 // #include <android/log.h>
+// extern int wgAndroidProtectFd(int fd);
 import "C"
 
 import (
@@ -18,6 +19,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -50,7 +52,10 @@ type TunnelHandle struct {
 	uapi   net.Listener
 }
 
-var tunnelHandles map[int32]TunnelHandle
+var (
+	tunnelHandles      map[int32]TunnelHandle
+	tunnelHandlesMutex sync.Mutex
+)
 
 func init() {
 	tunnelHandles = make(map[int32]TunnelHandle)
@@ -88,7 +93,25 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
 	}
 
 	logger.Verbosef("Attaching to interface %v", name)
-	device := device.NewDevice(tun, conn.NewStdNetBind(), logger)
+
+	// A multiplex bind carries both UDP and WebSocket/wstunnel peers: the UDP data path is the
+	// platform StdNetBind (unchanged, still exposing PeekLookAtSocketFd4/6 for the one-shot
+	// wgGetSocketV4/V6 protect), while every dialed WebSocket socket is protected per dial via the
+	// wgAndroidProtectFd upcall into VpnService.protect(fd).
+	bind, err := conn.NewMultiplexBind(
+		conn.WithWSProtect(func(fd int) {
+			if C.wgAndroidProtectFd(C.int(fd)) == 0 {
+				logger.Errorf("Failed to protect WebSocket socket fd %d", fd)
+			}
+		}),
+		conn.WithWSLogger(conn.Logger{Verbosef: logger.Verbosef, Errorf: logger.Errorf}),
+	)
+	if err != nil {
+		unix.Close(int(tunFd))
+		logger.Errorf("NewMultiplexBind: %v", err)
+		return -1
+	}
+	device := device.NewDevice(tun, bind, logger)
 
 	err = device.IpcSet(settings)
 	if err != nil {
@@ -130,6 +153,7 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
 	}
 	logger.Verbosef("Device started")
 
+	tunnelHandlesMutex.Lock()
 	var i int32
 	for i = 0; i < math.MaxInt32; i++ {
 		if _, exists := tunnelHandles[i]; !exists {
@@ -137,31 +161,52 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
 		}
 	}
 	if i == math.MaxInt32 {
+		tunnelHandlesMutex.Unlock()
 		logger.Errorf("Unable to find empty handle")
 		uapiFile.Close()
 		device.Close()
 		return -1
 	}
 	tunnelHandles[i] = TunnelHandle{device: device, uapi: uapi}
+	tunnelHandlesMutex.Unlock()
 	return i
 }
 
 //export wgTurnOff
 func wgTurnOff(tunnelHandle int32) {
+	tunnelHandlesMutex.Lock()
 	handle, ok := tunnelHandles[tunnelHandle]
+	if ok {
+		delete(tunnelHandles, tunnelHandle)
+	}
+	tunnelHandlesMutex.Unlock()
 	if !ok {
 		return
 	}
-	delete(tunnelHandles, tunnelHandle)
 	if handle.uapi != nil {
 		handle.uapi.Close()
 	}
 	handle.device.Close()
 }
 
+//export wgBumpSockets
+func wgBumpSockets(tunnelHandle int32) {
+	tunnelHandlesMutex.Lock()
+	handle, ok := tunnelHandles[tunnelHandle]
+	tunnelHandlesMutex.Unlock()
+	if !ok {
+		return
+	}
+	if err := handle.device.BindUpdate(); err != nil {
+		C.__android_log_write(C.ANDROID_LOG_ERROR, cstring("WireGuard/GoBackend"), cstring(fmt.Sprintf("BindUpdate: %v", err)))
+	}
+}
+
 //export wgGetSocketV4
 func wgGetSocketV4(tunnelHandle int32) int32 {
+	tunnelHandlesMutex.Lock()
 	handle, ok := tunnelHandles[tunnelHandle]
+	tunnelHandlesMutex.Unlock()
 	if !ok {
 		return -1
 	}
@@ -178,7 +223,9 @@ func wgGetSocketV4(tunnelHandle int32) int32 {
 
 //export wgGetSocketV6
 func wgGetSocketV6(tunnelHandle int32) int32 {
+	tunnelHandlesMutex.Lock()
 	handle, ok := tunnelHandles[tunnelHandle]
+	tunnelHandlesMutex.Unlock()
 	if !ok {
 		return -1
 	}
@@ -195,7 +242,9 @@ func wgGetSocketV6(tunnelHandle int32) int32 {
 
 //export wgGetConfig
 func wgGetConfig(tunnelHandle int32) *C.char {
+	tunnelHandlesMutex.Lock()
 	handle, ok := tunnelHandles[tunnelHandle]
+	tunnelHandlesMutex.Unlock()
 	if !ok {
 		return nil
 	}
@@ -214,11 +263,15 @@ func wgVersion() *C.char {
 	}
 	for _, dep := range info.Deps {
 		if dep.Path == "golang.zx2c4.com/wireguard" {
-			parts := strings.Split(dep.Version, "-")
+			mod := dep
+			if dep.Replace != nil {
+				mod = dep.Replace
+			}
+			parts := strings.Split(mod.Version, "-")
 			if len(parts) == 3 && len(parts[2]) == 12 {
 				return C.CString(parts[2][:7])
 			}
-			return C.CString(dep.Version)
+			return C.CString(mod.Version)
 		}
 	}
 	return C.CString("unknown")

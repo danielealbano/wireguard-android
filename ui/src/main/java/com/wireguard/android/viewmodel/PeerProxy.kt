@@ -38,7 +38,89 @@ class PeerProxy : BaseObservable, Parcelable {
         set(value) {
             field = value
             notifyPropertyChanged(BR.endpoint)
+            notifyPropertyChanged(BR.wsEndpoint)
         }
+
+    @get:Bindable
+    var wsMode: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsMode)
+        }
+
+    @get:Bindable
+    var wstunnelTarget: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wstunnelTarget)
+        }
+
+    @get:Bindable
+    var wsBearer: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsBearer)
+        }
+
+    @get:Bindable
+    var wsMask: Boolean = false
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsMask)
+        }
+
+    @get:Bindable
+    var wsTlsCa: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsTlsCa)
+        }
+
+    @get:Bindable
+    var wsTlsCert: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsTlsCert)
+        }
+
+    @get:Bindable
+    var wsTlsKey: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsTlsKey)
+        }
+
+    @get:Bindable
+    var wsTlsInsecure: Boolean = false
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsTlsInsecure)
+        }
+
+    @get:Bindable
+    var wsPingInterval: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsPingInterval)
+        }
+
+    @get:Bindable
+    var wsBackoffMin: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsBackoffMin)
+        }
+
+    @get:Bindable
+    var wsBackoffMax: String = ""
+        set(value) {
+            field = value
+            notifyPropertyChanged(BR.wsBackoffMax)
+        }
+
+    @get:Bindable
+    val isWsEndpoint: Boolean
+        get() = endpoint.startsWith("ws://", true) || endpoint.startsWith("wss://", true)
 
     @get:Bindable
     var persistentKeepalive: String = ""
@@ -75,14 +157,38 @@ class PeerProxy : BaseObservable, Parcelable {
         persistentKeepalive = parcel.readString() ?: ""
         preSharedKey = parcel.readString() ?: ""
         publicKey = parcel.readString() ?: ""
+        wsMode = parcel.readString() ?: ""
+        wstunnelTarget = parcel.readString() ?: ""
+        wsBearer = parcel.readString() ?: ""
+        wsMask = parcel.readInt() != 0
+        wsTlsCa = parcel.readString() ?: ""
+        wsTlsCert = parcel.readString() ?: ""
+        wsTlsKey = parcel.readString() ?: ""
+        wsTlsInsecure = parcel.readInt() != 0
+        wsPingInterval = parcel.readString() ?: ""
+        wsBackoffMin = parcel.readString() ?: ""
+        wsBackoffMax = parcel.readString() ?: ""
     }
 
     constructor(other: Peer) {
         allowedIps = Attribute.join(other.allowedIps)
-        endpoint = other.endpoint.map { it.toString() }.orElse("")
+        // A WS peer carries its ws:// URL verbatim on the endpoint field; a UDP peer its host:port.
+        endpoint = other.wsUrl.map { it.toString() }.orElseGet { other.endpoint.map { it.toString() }.orElse("") }
         persistentKeepalive = other.persistentKeepalive.map { it.toString() }.orElse("")
         preSharedKey = other.preSharedKey.map { it.toBase64() }.orElse("")
         publicKey = other.publicKey.toBase64()
+        // getName() (the lowercase wire form), NOT Kotlin's it.name (the enum constant name).
+        wsMode = other.wsMode.map { it.getName() }.orElse("")
+        wstunnelTarget = other.wstunnelTarget.orElse("")
+        wsBearer = other.wsBearer.orElse("")
+        wsMask = other.wsMask
+        wsTlsCa = other.wsTlsCa.orElse("")
+        wsTlsCert = other.wsTlsCert.orElse("")
+        wsTlsKey = other.wsTlsKey.orElse("")
+        wsTlsInsecure = other.wsTlsInsecure
+        wsPingInterval = other.wsPingIntervalMs.map { it.toString() }.orElse("")
+        wsBackoffMin = other.wsBackoffMinMs.map { it.toString() }.orElse("")
+        wsBackoffMax = other.wsBackoffMaxMs.map { it.toString() }.orElse("")
     }
 
     constructor()
@@ -161,12 +267,34 @@ class PeerProxy : BaseObservable, Parcelable {
     fun resolve(): Peer {
         val builder = Peer.Builder()
         if (allowedIps.isNotEmpty()) builder.parseAllowedIPs(allowedIps)
+        // parseEndpoint routes a ws:// URL to the WS endpoint parser.
         if (endpoint.isNotEmpty()) builder.parseEndpoint(endpoint)
         if (persistentKeepalive.isNotEmpty()) builder.parsePersistentKeepalive(persistentKeepalive)
         if (preSharedKey.isNotEmpty()) builder.parsePreSharedKey(preSharedKey)
         if (publicKey.isNotEmpty()) builder.parsePublicKey(publicKey)
+        if (wsMode.isNotEmpty()) builder.parseWsMode(wsMode)
+        if (wstunnelTarget.isNotEmpty()) builder.parseWstunnelTarget(wstunnelTarget)
+        if (wsBearer.isNotEmpty()) builder.parseWsBearer(wsBearer)
+        if (wsMask) builder.parseWsMask("true")
+        if (wsTlsCa.isNotEmpty()) builder.parseWsTlsCa(wsTlsCa)
+        if (wsTlsCert.isNotEmpty()) builder.parseWsTlsCert(wsTlsCert)
+        if (wsTlsKey.isNotEmpty()) builder.parseWsTlsKey(wsTlsKey)
+        if (wsTlsInsecure) builder.parseWsTlsInsecure("true")
+        if (wsPingInterval.isNotEmpty()) builder.parseWsPingInterval(wsPingInterval)
+        if (wsBackoffMin.isNotEmpty()) builder.parseWsBackoffMin(wsBackoffMin)
+        if (wsBackoffMax.isNotEmpty()) builder.parseWsBackoffMax(wsBackoffMax)
         return builder.build()
     }
+
+    fun setWsFile(kind: WsFileKind, path: String) {
+        when (kind) {
+            WsFileKind.CA -> wsTlsCa = path
+            WsFileKind.CERT -> wsTlsCert = path
+            WsFileKind.KEY -> wsTlsKey = path
+        }
+    }
+
+    enum class WsFileKind { CA, CERT, KEY }
 
     private fun setInterfaceDns(dnsServers: CharSequence) {
         val newDnsRoutes = Attribute.split(dnsServers).filter { !it.contains(":") }.map { "$it/32" }
@@ -206,6 +334,17 @@ class PeerProxy : BaseObservable, Parcelable {
         dest.writeString(persistentKeepalive)
         dest.writeString(preSharedKey)
         dest.writeString(publicKey)
+        dest.writeString(wsMode)
+        dest.writeString(wstunnelTarget)
+        dest.writeString(wsBearer)
+        dest.writeInt(if (wsMask) 1 else 0)
+        dest.writeString(wsTlsCa)
+        dest.writeString(wsTlsCert)
+        dest.writeString(wsTlsKey)
+        dest.writeInt(if (wsTlsInsecure) 1 else 0)
+        dest.writeString(wsPingInterval)
+        dest.writeString(wsBackoffMin)
+        dest.writeString(wsBackoffMax)
     }
 
     private enum class AllowedIpsState {
