@@ -1270,7 +1270,7 @@ on-device against the live server.
   gate per `go.md`).
 - [x] Mermaid validation for ALL charts touched by US8 (and any touched elsewhere) per
   `development_pipeline.md` §9.
-- [ ] **On-device e2e (MANDATORY):** `scripts/e2e-android.sh <full.conf> <split.conf>` passes
+- [x] **On-device e2e (MANDATORY):** `scripts/e2e-android.sh <full.conf> <split.conf>` passes
   BOTH variants against the live server. If device/server unavailable, STOP and hand off to the
   user — the PR is opened ONLY after the e2e passes.
 
@@ -1286,6 +1286,14 @@ on-device against the live server.
 
 ## Deviations
 
+- **US6 e2e script hardened after the first on-device run.** The initial run failed at the baseline
+  `ifconfig.me` lookup because `wifi_on`/`wifi_off` used a fixed `sleep 8` that did not guarantee the
+  underlying transport had connectivity before the first request (root cause, not flakiness). The
+  script now polls for real internet reachability (`wait_online`) after each Wi‑Fi toggle, enables
+  cellular data best-effort in preconditions, and `cleanup` no longer calls the now-`fail`-capable
+  `wifi_on`. With this, the full e2e **PASSES** on a Pixel 8 Pro against the live server:
+  full-tunnel egress IP stays the server's across a Wi‑Fi→cellular switch, and the split-tunnel LAN
+  gateway (`192.168.178.1`) is reachable through the tunnel over both networks.
 - **US7 round-trip tests — assert serialization idempotency, not `Config.equals`.** `KeyPair`
   (`com.wireguard.crypto`) has no value `equals()` (identity only), so `Interface.equals` — and
   therefore `Config.equals` — can never hold across two parses of the same text. The WS round-trip

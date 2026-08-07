@@ -45,14 +45,28 @@ bcast() {
     esac
 }
 
+# wait_online <timeout-seconds>: poll until the device has raw internet connectivity (off-VPN).
+wait_online() {
+    local timeout="$1" waited=0
+    while [ "$waited" -lt "$timeout" ]; do
+        adb shell ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 && return 0
+        sleep 3
+        waited=$((waited + 3))
+    done
+    return 1
+}
+
 wifi_off() {
     adb shell svc wifi disable >/dev/null 2>&1 || adb shell cmd wifi set-wifi-enabled disabled >/dev/null 2>&1
-    sleep 8
+    # Fall back to cellular; wait until the underlying transport actually carries traffic so the VPN
+    # has a path to re-dial over.
+    wait_online 30 || fail "no cellular connectivity after disabling Wi-Fi (is mobile data on with a working SIM?)"
 }
 
 wifi_on() {
     adb shell svc wifi enable >/dev/null 2>&1 || adb shell cmd wifi set-wifi-enabled enabled >/dev/null 2>&1
-    sleep 8
+    # Wait for Wi-Fi to actually associate + get DNS, not a fixed sleep.
+    wait_online 30 || fail "no Wi-Fi connectivity after enabling Wi-Fi"
 }
 
 # wait_handshake <name> <timeout-seconds>: poll GET_STATE until handshake_epoch_ms > 0.
@@ -71,7 +85,8 @@ wait_handshake() {
 }
 
 cleanup() {
-    wifi_on
+    # Best-effort restore (must not itself abort the trap).
+    adb shell svc wifi enable >/dev/null 2>&1 || adb shell cmd wifi set-wifi-enabled enabled >/dev/null 2>&1
     bcast TUNNEL_DOWN --es name "$FULL_NAME" >/dev/null 2>&1 || true
     bcast TUNNEL_DOWN --es name "$SPLIT_NAME" >/dev/null 2>&1 || true
 }
@@ -83,6 +98,9 @@ FULL_CONF="$1"; SPLIT_CONF="$2"
 [ -r "$FULL_CONF" ] || fail "cannot read $FULL_CONF"
 [ -r "$SPLIT_CONF" ] || fail "cannot read $SPLIT_CONF"
 [ "$(adb get-state 2>/dev/null)" = "device" ] || fail "no adb device attached"
+
+# Enable cellular data so the Wi-Fi->cellular switch has a path (the SIM must be present/working).
+adb shell svc data enable >/dev/null 2>&1 || true
 
 # --- Build, install, pre-grant VPN consent ---
 echo "== building and installing the debug APK =="
