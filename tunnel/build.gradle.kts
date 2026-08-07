@@ -4,6 +4,7 @@ import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.gradle.api.tasks.bundling.Zip
 
 val pkg: String = providers.gradleProperty("wireguardPackageName").get()
+val appId: String = providers.gradleProperty("wireguardApplicationId").get()
 
 plugins {
     alias(libs.plugins.android.library)
@@ -44,14 +45,14 @@ android {
         release {
             externalNativeBuild {
                 cmake {
-                    arguments("-DANDROID_PACKAGE_NAME=${pkg}")
+                    arguments("-DANDROID_PACKAGE_NAME=${appId}")
                 }
             }
         }
         debug {
             externalNativeBuild {
                 cmake {
-                    arguments("-DANDROID_PACKAGE_NAME=${pkg}.debug")
+                    arguments("-DANDROID_PACKAGE_NAME=${appId}.debug")
                 }
             }
         }
