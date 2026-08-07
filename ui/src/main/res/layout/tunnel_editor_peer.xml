@@ -200,6 +200,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/wstunnel_target_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -217,6 +218,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/ws_bearer_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -238,6 +240,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/ws_tls_ca_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -259,6 +262,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/ws_tls_cert_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -280,6 +284,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/ws_tls_key_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -297,6 +302,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/ws_ping_interval_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -314,6 +320,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/ws_backoff_min_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -331,6 +338,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/ws_backoff_max_text"
+                        android:hint="@string/hint_optional"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
