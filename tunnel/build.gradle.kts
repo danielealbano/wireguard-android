@@ -13,6 +13,7 @@ plugins {
 
 android {
     compileSdk = 36
+    ndkVersion = "28.2.13676358"
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -24,6 +25,7 @@ android {
     externalNativeBuild {
         cmake {
             path("tools/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
     testOptions.unitTests.all {
