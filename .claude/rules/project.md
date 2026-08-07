@@ -53,7 +53,7 @@ Versions are authoritative in `gradle/libs.versions.toml`, `gradle.properties`, 
 | VPN | Android `VpnService` (GoBackend) / root `wg-quick` (WgQuickBackend) | Two backends, selected at runtime. |
 | Library publishing | `maven-publish` + GPG `signing` | `:tunnel` artifact `com.wireguard.android:tunnel`. |
 | Command surface | **Makefile** wrapping `./gradlew` | ROADMAP — not yet present; see Standard Commands. |
-| Release / CI | **GitHub Actions** + signed release | ROADMAP — not yet present; see `android.md` and `docs/PROJECT.md`. |
+| Release / CI | **GitHub Actions** (`.github/workflows/`) + signed release | DELIVERED — `ci.yml` (build/lint/test + debug APK on push/PR), `release.yml` (signed APK+AAB on `v*` tags). See `android.md`. |
 
 ---
 
@@ -96,10 +96,11 @@ Versions are authoritative in `gradle/libs.versions.toml`, `gradle.properties`, 
 - Do NOT re-architect the two-backend model or drop the kernel/root backend. Do NOT add a database
   or new persistent store (configs live as files via `FileConfigStore`). Do NOT change the
   application id / package name. Do NOT implement the WebSocket **transport** here — that belongs in
-  the `wireguard-go` fork; this repo only *consumes* it and adds UI. Do NOT add new native libraries,
-  CI workflows, signing config, or a Makefile ad hoc — they are Roadmap items delivered through the
-  pipeline when scheduled. Do NOT introduce new lint/format tooling (ktlint, detekt, spotless) — the
-  project uses Android Lint + compiler warnings only.
+  the `wireguard-go` fork; this repo only *consumes* it and adds UI. Do NOT add new native libraries
+  or a Makefile ad hoc — they are Roadmap items delivered through the pipeline when scheduled. CI
+  (`.github/workflows/`) and the release signing config already exist — extend them deliberately, do
+  NOT add parallel/competing workflows or signing paths. Do NOT introduce new lint/format tooling
+  (ktlint, detekt, spotless) — the project uses Android Lint + compiler warnings only.
 
 ---
 
@@ -135,8 +136,8 @@ underlying commands directly. Intended targets → underlying commands:
 | Target | Underlying command |
 |---|---|
 | `make build` | `./gradlew assembleDebug` |
-| `make assemble-release` | `./gradlew assembleRelease` (release APK; signing is ROADMAP — unsigned today) |
-| `make bundle-release` | `./gradlew bundleRelease` (release AAB; signing is ROADMAP — unsigned today) |
+| `make assemble-release` | `./gradlew assembleRelease` (release APK; signed when the keystore env is set — see `android.md`, else unsigned) |
+| `make bundle-release` | `./gradlew bundleRelease` (release AAB; signed when the keystore env is set — see `android.md`, else unsigned) |
 | `make lint` | `./gradlew :ui:lintDebug :tunnel:lint` (Android Lint) |
 | `make test` | `./gradlew :tunnel:test` (JUnit unit tests) |
 | `make go-vet` | `cd tunnel/tools/libwg-go && go vet ./...` |

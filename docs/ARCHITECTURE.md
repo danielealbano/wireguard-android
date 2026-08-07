@@ -280,7 +280,8 @@ Settings and state persist through **Preferences DataStore** (`UserKnobs`); mana
 The **WebSocket/wstunnel transport is delivered** (below); it extended two boundaries — the JNI
 contract gained new exports (per-dial protect callback, socket bump) and the config model gained the
 per-peer transport surface — while the `VpnService` establishment flow and the UDP data path stayed
-unchanged. The only pending extension is CI + signed release.
+unchanged. CI and the signed-release workflow are also delivered; the only pending extension is the
+root Makefile command surface.
 
 ```mermaid
 flowchart LR
@@ -291,8 +292,12 @@ flowchart LR
         WSUI["editor : all WS parameters"]
         DISP["DispatchingBackend : WS peers on GoBackend, UDP classic"]
     end
+    subgraph Build["Delivered — CI & release"]
+        CI["ci.yml : build + lint + test, debug APK"]
+        REL["release.yml : signed release APK + AAB on v-tags"]
+    end
     subgraph Pending["Roadmap"]
-        CI["GitHub Actions : signed release APK + AAB"]
+        MK2["root Makefile : ./gradlew command surface"]
     end
 
     FORK --> MPLEX
@@ -316,5 +321,7 @@ flowchart LR
 - **Per-tunnel backend dispatch (delivered)** via `DispatchingBackend`: a config with any
   websocket/wstunnel peer always runs on `GoBackend`; pure-UDP configs keep the classic
   kernel-vs-userspace selection; `WgQuickBackend` fails fast on a WS bring-up.
-- **CI + signing (pending)** is additive build/tooling (a signed release variant + a GitHub Actions
-  workflow + a root Makefile), with no change to app behavior.
+- **CI + signing (delivered)** is additive build/tooling: `.github/workflows/ci.yml` runs the quality
+  gates and uploads the debug APK on push/PR, and `.github/workflows/release.yml` builds a signed
+  release APK + AAB on `v*` tags (keystore from CI secrets via the `:ui` `signingConfig`), with no
+  change to app behavior. A root **Makefile** command surface remains the one pending build-tooling item.
