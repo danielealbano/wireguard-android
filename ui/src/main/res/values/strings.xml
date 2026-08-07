@@ -66,7 +66,9 @@
     <string name="allow_remote_control_intents_summary_on">External apps may toggle tunnels (advanced)</string>
     <string name="allow_remote_control_intents_title">Allow remote control apps</string>
     <string name="allowed_ips">Allowed IPs</string>
-    <string name="app_name" translatable="false">WireGuard</string>
+    <string name="app_name" translatable="false">WireGuard WS</string>
+    <string name="about_fork_title" translatable="false">About WireGuard WS (unofficial fork)</string>
+    <string name="about_fork_summary" translatable="false">Unofficial build based on the official WireGuard for Android, adding per-peer WebSocket/wstunnel transport to reach servers on networks that block plain UDP. This requires the matching server-side forks of wireguard-go and wireguard-tools (github.com/danielealbano). Tap to open the project on GitHub.</string>
     <string name="bad_config_context">%1$s\'s %2$s</string>
     <string name="bad_config_context_top_level">%s</string>
     <string name="bad_config_error">%1$s in %2$s</string>
