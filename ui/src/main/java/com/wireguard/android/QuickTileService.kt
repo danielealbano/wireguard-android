@@ -4,6 +4,7 @@
  */
 package com.wireguard.android
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Bitmap
@@ -64,8 +65,7 @@ class QuickTileService : TileService() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         startActivityAndCollapse(PendingIntent.getActivity(this@QuickTileService, 0, intent, PendingIntent.FLAG_IMMUTABLE))
                     } else {
-                        @Suppress("DEPRECATION")
-                        startActivityAndCollapse(intent)
+                        startActivityAndCollapseLegacy(intent)
                     }
                 }
 
@@ -100,6 +100,15 @@ class QuickTileService : TileService() {
                 }
             }
         }
+    }
+
+    // startActivityAndCollapse(PendingIntent) exists only from API 34 (UPSIDE_DOWN_CAKE); on API 24–33
+    // the deprecated Intent overload is the only API that collapses the Quick Settings panel. The ≥34
+    // path above uses the non-deprecated overload, so this legacy call is unreachable on API 34+.
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    @Suppress("DEPRECATION")
+    private fun startActivityAndCollapseLegacy(intent: Intent) {
+        startActivityAndCollapse(intent)
     }
 
     override fun onCreate() {

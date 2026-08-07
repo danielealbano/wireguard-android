@@ -96,11 +96,7 @@
         <activity
             android:name=".activity.LogViewerActivity"
             android:exported="false"
-            android:label="@string/log_viewer_title">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-            </intent-filter>
-        </activity>
+            android:label="@string/log_viewer_title" />
 
         <provider
             android:name=".activity.LogViewerActivity$ExportedLogContentProvider"
