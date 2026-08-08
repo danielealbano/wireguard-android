@@ -96,6 +96,11 @@ not a flavor.
   via Crowdin); `:tunnel` disables `LongLogTag` and `NewApi`. You MUST NOT add new `disable`s,
   `@SuppressLint`, `//noinspection`, or a **lint baseline** to hide findings — FIX the root cause.
   Any genuinely unavoidable suppression REQUIRES user approval first (per `agent.md`/`go.md`).
+- **Approved suppression (user-authorized):** `QuickTileService.startActivityAndCollapseLegacy` carries
+  `@SuppressLint("StartActivityAndCollapseDeprecated")` because the deprecated
+  `startActivityAndCollapse(Intent)` is the ONLY panel-collapse API on API 24–33 (the ≥34 path uses the
+  non-deprecated `PendingIntent` overload). This is the sole permitted `@SuppressLint`; do NOT add others
+  without the same explicit approval.
 - There is **NO ktlint, detekt, spotless, checkstyle, PMD, or jacoco** in this project. You MUST NOT
   introduce one without the user's explicit decision — it is a project-wide tooling change.
 - Kotlin/Java compiler warnings MUST be taken seriously (`:ui` compiles Java with `-Xlint:unchecked`

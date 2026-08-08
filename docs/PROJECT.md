@@ -1,7 +1,9 @@
 # wireguard-android — Project
 
-**wireguard-android** is the official **Android GUI for [WireGuard](https://www.wireguard.com/)**
-(application id `com.wireguard.android`). It lets a user create, import, edit, and toggle WireGuard
+This repository is an **unofficial fork** of the **Android GUI for
+[WireGuard](https://www.wireguard.com/)** — installed application id `com.danielealbano.wireguard.ws`
+(code namespace and `:tunnel` Maven groupId stay `com.wireguard.android`), so it coexists with the
+official `com.wireguard.android` app. It lets a user create, import, edit, and toggle WireGuard
 tunnels, and brings them up/down through one of two backends:
 
 - a **non-root userspace backend** (`GoBackend`) that runs the `wireguard-go` userspace

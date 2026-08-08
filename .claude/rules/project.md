@@ -94,8 +94,11 @@ Versions are authoritative in `gradle/libs.versions.toml`, `gradle.properties`, 
 ## Non-goals (MUST NOT build unless the user EXPLICITLY asks)
 
 - Do NOT re-architect the two-backend model or drop the kernel/root backend. Do NOT add a database
-  or new persistent store (configs live as files via `FileConfigStore`). Do NOT change the
-  application id / package name. Do NOT implement the WebSocket **transport** here — that belongs in
+  or new persistent store (configs live as files via `FileConfigStore`). The installed `applicationId`
+  is intentionally the fork id `com.danielealbano.wireguard.ws` (set via `wireguardApplicationId`);
+  keep it distinct from the official `com.wireguard.android`, and keep the code namespace / `:tunnel`
+  Maven groupId on `com.wireguard.android` (do NOT move source packages). Do NOT implement the
+  WebSocket **transport** here — that belongs in
   the `wireguard-go` fork; this repo only *consumes* it and adds UI. Do NOT add new native libraries
   or a Makefile ad hoc — they are Roadmap items delivered through the pipeline when scheduled. CI
   (`.github/workflows/`) and the release signing config already exist — extend them deliberately, do
