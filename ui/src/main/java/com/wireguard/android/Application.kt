@@ -115,7 +115,12 @@ class Application : android.app.Application() {
                 Log.e(TAG, Log.getStackTraceString(e))
             }
         }
-        Updater.monitorForUpdates()
+        // The self-updater downloads Ed25519-signed APKs from download.wireguard.com for the official
+        // WireGuard distribution and enforces a com.wireguard.* package guard. This fork ships under a
+        // different applicationId via GitHub releases, so the self-updater does not apply and is not
+        // started (starting it would trip that guard and crash release builds on launch).
+        if (BuildConfig.APPLICATION_ID.startsWith("com.wireguard."))
+            Updater.monitorForUpdates()
 
         if (BuildConfig.DEBUG) {
             StrictMode.setVmPolicy(VmPolicy.Builder().detectAll().penaltyLog().build())
