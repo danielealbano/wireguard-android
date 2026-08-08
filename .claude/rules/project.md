@@ -13,7 +13,8 @@ built with Gradle + the Android Gradle Plugin and ships to the Play Store.
 > `go.mod` `replace`), which adds a **per-peer WebSocket/wstunnel transport**, and the app supports
 > that transport in the config model and UI (byte-compatible with the sibling `wireguard-tools`
 > fork's config surface) to bypass network paths that block UDP — both DELIVERED (see
-> `docs/PROJECT.md` → Delivered). Remaining ROADMAP: CI + signed release. Non-trivial work proceeds
+> `docs/PROJECT.md` → Delivered). GitHub Actions CI and the signed-release workflow are also DELIVERED;
+> the remaining ROADMAP item is the root Makefile command surface. Non-trivial work proceeds
 > via the development pipeline per `development_pipeline.md`. The canonical docs MUST be kept current
 > as decisions land.
 
