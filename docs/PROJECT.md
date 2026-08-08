@@ -39,9 +39,12 @@ so the same config runs on any device.
 - Integrates with Android platform surfaces: **VpnService** (incl. Always-On VPN), a **Quick
   Settings tile**, **boot** restore, an **Android TV** (leanback) UI, biometric-gated key reveal,
   managed-device restrictions, and a remote-control broadcast API guarded by a custom permission.
-- Ships a **non-Play self-updater** (Ed25519/signify-verified APK from `download.wireguard.com`,
-  installed via `PackageInstaller`) that is disabled in the `googleplay` build type and whenever the
-  app was installed from Google Play.
+- Inherits the upstream **non-Play self-updater** (Ed25519/signify-verified APK from
+  `download.wireguard.com`, installed via `PackageInstaller`), but it is **inactive in this fork**:
+  it is started only when `BuildConfig.APPLICATION_ID` is a `com.wireguard.*` package, so the fork's
+  `com.danielealbano.wireguard.ws` builds never run it (releases are distributed via GitHub Releases —
+  see `release.yml`). Upstream it is additionally disabled in the `googleplay` build type and whenever
+  the app was installed from Google Play.
 
 ---
 
