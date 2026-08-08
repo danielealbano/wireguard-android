@@ -1,7 +1,9 @@
 # wireguard-android — Project
 
-**wireguard-android** is the official **Android GUI for [WireGuard](https://www.wireguard.com/)**
-(application id `com.wireguard.android`). It lets a user create, import, edit, and toggle WireGuard
+This repository is an **unofficial fork** of the **Android GUI for
+[WireGuard](https://www.wireguard.com/)** — installed application id `com.danielealbano.wireguard.ws`
+(code namespace and `:tunnel` Maven groupId stay `com.wireguard.android`), so it coexists with the
+official `com.wireguard.android` app. It lets a user create, import, edit, and toggle WireGuard
 tunnels, and brings them up/down through one of two backends:
 
 - a **non-root userspace backend** (`GoBackend`) that runs the `wireguard-go` userspace
@@ -18,7 +20,8 @@ so the same config runs on any device.
 > `danielealbano/wireguard-go` fork (v1.3.0) and the app supports that fork's **per-peer
 > WebSocket/wstunnel transport** in the config model and UI, byte-compatible with the sibling
 > `wireguard-tools` fork's config surface (see [Delivered](#delivered-websocketwstunnel-transport)).
-> Remaining work (CI + signed release) is in [Roadmap](#roadmap). Non-trivial work proceeds via the
+> GitHub Actions CI and the signed-release workflow are delivered; the remaining root **Makefile**
+> command surface is in [Roadmap](#roadmap). Non-trivial work proceeds via the
 > development pipeline (`.claude/rules/development_pipeline.md`); these canonical docs MUST be kept
 > current as decisions land.
 
@@ -36,9 +39,12 @@ so the same config runs on any device.
 - Integrates with Android platform surfaces: **VpnService** (incl. Always-On VPN), a **Quick
   Settings tile**, **boot** restore, an **Android TV** (leanback) UI, biometric-gated key reveal,
   managed-device restrictions, and a remote-control broadcast API guarded by a custom permission.
-- Ships a **non-Play self-updater** (Ed25519/signify-verified APK from `download.wireguard.com`,
-  installed via `PackageInstaller`) that is disabled in the `googleplay` build type and whenever the
-  app was installed from Google Play.
+- Inherits the upstream **non-Play self-updater** (Ed25519/signify-verified APK from
+  `download.wireguard.com`, installed via `PackageInstaller`), but it is **inactive in this fork**:
+  it is started only when `BuildConfig.APPLICATION_ID` is a `com.wireguard.*` package, so the fork's
+  `com.danielealbano.wireguard.ws` builds never run it (releases are distributed via GitHub Releases —
+  see `release.yml`). Upstream it is additionally disabled in the `googleplay` build type and whenever
+  the app was installed from Google Play.
 
 ---
 
@@ -60,7 +66,7 @@ Versions are authoritative in `gradle/libs.versions.toml`, `gradle.properties`, 
 | Biometrics | `androidx.biometric` | Gates private-key reveal and config export. |
 | VPN | Android `VpnService` / root `wg-quick` | Two backends (see below). |
 | Library publish | `maven-publish` + GPG `signing` | Artifact `com.wireguard.android:tunnel` (+ javadoc/sources jars). |
-| Release / CI | GitHub Actions + signed release | **ROADMAP** — not yet present. |
+| Release / CI | GitHub Actions (`.github/workflows/`) | `ci.yml`: build/lint/test + debug APK on push/PR. `release.yml`: signed release APK + AAB on `v*` tags. |
 
 **No external service dependency**: all I/O is local (VPN interface, UDP sockets, the app's config
 files, `logcat`) plus the updater's HTTPS fetch from `download.wireguard.com`.
@@ -173,15 +179,23 @@ present**. Until it exists, use the Gradle wrapper directly (see
 `.claude/rules/project.md` → Standard Commands for the full target ↔ command map):
 
 - Build (debug): `./gradlew assembleDebug`
-- Release APK / AAB (signed — see Roadmap): `./gradlew assembleRelease` / `./gradlew bundleRelease`
+- Release APK / AAB: `./gradlew assembleRelease` / `./gradlew bundleRelease` — signed when the
+  keystore env (`KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`) is present,
+  unsigned otherwise (see `.claude/rules/android.md` → Signing).
 - Android Lint: `./gradlew :ui:lintDebug :tunnel:lint`
 - Unit tests: `./gradlew :tunnel:test`
 - Publish `:tunnel` (release only): `./gradlew :tunnel:publishReleasePublicationToSonatypeUploadRepository`
 - Clean: `./gradlew clean`
 
 Building from a fresh checkout requires `--recurse-submodules` (for `wireguard-tools` + `elf-cleaner`),
-the **Android NDK/CMake**, and network access for the pinned **Go toolchain** the `libwg-go/Makefile`
-downloads. macOS may need `flock(1)`.
+the **Android NDK/CMake** (pinned to `28.2.13676358` / `3.22.1`), and network access for the pinned
+**Go toolchain** the `libwg-go/Makefile` downloads. macOS may need `flock(1)`.
+
+**CI (GitHub Actions, `.github/workflows/`):** `ci.yml` runs the quality gates — `assembleDebug`,
+`:ui:lintDebug :tunnel:lint`, `:tunnel:test` — in parallel on push/PR to `main` and uploads the debug
+APK; each job provisions the NDK/CMake via `sdkmanager` (the Go toolchain self-provisions through the
+Makefile). `release.yml` builds a **signed** release APK + AAB on `v*` tags (keystore from CI secrets)
+and drafts a GitHub Release with them attached.
 
 ---
 
@@ -223,10 +237,11 @@ picker for the TLS material), and correctness is proven by the mandatory on-devi
 Planned extensions to this fork (each proceeds through the development pipeline; nothing here is
 implemented unless a plan under `docs/plans/` says so):
 
-1. **CI + signed release automation** (GitHub Actions): quality gates + a debug-APK artifact on
-   push/PR; a **signed release APK + AAB** attached to a GitHub Release on `v*` tags, with the
-   keystore supplied via CI secrets (`KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` /
-   `KEY_PASSWORD`). A root **Makefile** wrapping `./gradlew` becomes the command surface.
+1. **Root `Makefile` command surface** wrapping `./gradlew` and the `libwg-go` Go tooling, per the
+   target ↔ command map in `.claude/rules/project.md` → Standard Commands.
+
+CI and signed-release automation (GitHub Actions) are **delivered** — see *Build & Commands* → CI and
+`.github/workflows/{ci,release}.yml`.
 
 See `docs/ARCHITECTURE.md` → *Roadmap integration points* for where these map onto the existing
 boundaries.

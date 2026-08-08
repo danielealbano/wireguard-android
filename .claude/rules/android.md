@@ -96,37 +96,49 @@ not a flavor.
   via Crowdin); `:tunnel` disables `LongLogTag` and `NewApi`. You MUST NOT add new `disable`s,
   `@SuppressLint`, `//noinspection`, or a **lint baseline** to hide findings — FIX the root cause.
   Any genuinely unavoidable suppression REQUIRES user approval first (per `agent.md`/`go.md`).
+- **Approved suppression (user-authorized):** `QuickTileService.startActivityAndCollapseLegacy` carries
+  `@SuppressLint("StartActivityAndCollapseDeprecated")` because the deprecated
+  `startActivityAndCollapse(Intent)` is the ONLY panel-collapse API on API 24–33 (the ≥34 path uses the
+  non-deprecated `PendingIntent` overload). This is the sole permitted `@SuppressLint`; do NOT add others
+  without the same explicit approval.
 - There is **NO ktlint, detekt, spotless, checkstyle, PMD, or jacoco** in this project. You MUST NOT
   introduce one without the user's explicit decision — it is a project-wide tooling change.
 - Kotlin/Java compiler warnings MUST be taken seriously (`:ui` compiles Java with `-Xlint:unchecked`
   + deprecation); keep the build warning-clean.
 
-## 4) Signing & Release — ABSOLUTE RULES (release path is ROADMAP)
+## 4) Signing & Release — ABSOLUTE RULES
 
-- **A shippable release MUST be a SIGNED release/`googleplay` variant — NEVER a debug build.** Today
-  there is **no release `signingConfig`**, so `assembleRelease` produces an UNSIGNED APK; adding
-  signing + CI is the planned work (see `project.md` → Roadmap; do NOT implement ad hoc).
+- **A shippable release MUST be a SIGNED release/`googleplay` variant — NEVER a debug build.**
 - **Secrets are SACRED.** Keystores (`*.jks`) and passwords MUST NEVER be committed (`*.jks` is
-  gitignored — keep it so) or logged. The release `signingConfig` MUST read its material from the
+  gitignored — keep it so) or logged. The release `signingConfig` reads its material from the
   **environment / CI secrets**, never from files in the repo.
-- **Intended signing wiring (ROADMAP):** a `release` `signingConfig` in `:ui` reads
-  `KEYSTORE_BASE64` (base64-decoded to a temp keystore at build time), `KEYSTORE_PASSWORD`,
-  `KEY_ALIAS`, `KEY_PASSWORD` from the environment; when they are absent (local dev), the release
-  build stays unsigned rather than failing configuration.
+- **Signing wiring (DELIVERED):** the `release` `signingConfig` in `:ui/build.gradle.kts` reads
+  `KEYSTORE_BASE64` (base64-decoded to `ui/build/release-signing/release.jks` at build time),
+  `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` from the environment; `googleplay` inherits it via
+  `initWith(release)`. When `KEYSTORE_BASE64` is absent (local dev), the release build stays unsigned
+  rather than failing configuration. You MUST keep this env-only, no-fail-on-absent behavior — do NOT
+  read signing material from committed files, and do NOT make configuration fail when it is missing.
 - The `:tunnel` **Maven publication** is signed with **GPG** (`signing { useGpgCmd() }`) and published
   into the **local** `SonatypeUpload` Maven-layout repo (`build/sonatype`), which the
   `zipReleasePublication` task packages as a `*-maven.zip` for upload to Maven Central; its GPG
   key/credentials come from the environment too. Publishing is NOT part of ordinary development.
 
-### CI / GitHub Actions — ROADMAP (do NOT create ad hoc)
-Per `project.md`, CI is planned as GitHub Actions and MUST, when built, follow this shape:
-- **On push / PR:** run the quality gates — `./gradlew assembleDebug`, `:ui:lintDebug :tunnel:lint`,
-  `:tunnel:test` — and upload the **debug APK as a CI artifact**. The native build requires the
-  **Android NDK** and the **Go toolchain** (the Makefile downloads/pins Go; the NDK comes from the
-  SDK manager) — the workflow MUST provision both and use the pinned Gradle wrapper.
-- **On `v*` tag:** build a **signed release APK AND AAB** (signing material from the secrets above)
-  and attach them to a **GitHub Release**.
-- The workflow MUST NOT print secrets and MUST use the wrapper (respecting `distributionSha256Sum`).
+### CI / GitHub Actions — DELIVERED (`.github/workflows/`)
+CI is GitHub Actions; extend the existing workflows deliberately, do NOT add competing ones.
+- **`ci.yml` — on push / PR to `main`:** three PARALLEL jobs run the quality gates — `assembleDebug`,
+  `:ui:lintDebug :tunnel:lint`, `:tunnel:test` — and the build job uploads the **debug APK** artifact.
+  The native build requires the **Android NDK + CMake** (each job installs `ndk;28.2.13676358` /
+  `cmake;3.22.1` via `sdkmanager`); the **Go toolchain self-provisions** through
+  `libwg-go/Makefile` (no `setup-go` step). The pinned Gradle wrapper is used (via
+  `gradle/actions/setup-gradle`), and the Go tarball is cached under `~/.gradle/caches/golang`.
+- **`release.yml` — on `v*` tag:** builds a **signed release APK AND AAB** (keystore from the CI
+  secrets above, decoded by the `:ui` `signingConfig`), fails loudly if the keystore secret is
+  absent, and drafts a **GitHub Release** with both artifacts attached. The tag drives `versionName`
+  via `-PwireguardVersionName`; bump `wireguardVersionCode` in `gradle.properties` before tagging.
+- Workflows MUST NOT print secrets and MUST use the wrapper (respecting `distributionSha256Sum`).
+- **NDK/CMake pin:** `:tunnel` pins `ndkVersion = "28.2.13676358"` and the CMake `version = "3.22.1"`
+  so local and CI native builds are reproducible; keep the workflow `sdkmanager` versions in sync
+  with these if they are ever bumped.
 
 ## 5) Testing (Android level)
 

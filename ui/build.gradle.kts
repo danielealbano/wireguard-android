@@ -1,6 +1,9 @@
 @file:Suppress("UnstableApiUsage")
 
+import java.util.Base64
+
 val pkg: String = providers.gradleProperty("wireguardPackageName").get()
+val appId: String = providers.gradleProperty("wireguardApplicationId").get()
 
 plugins {
     alias(libs.plugins.android.application)
@@ -16,7 +19,7 @@ android {
     }
     namespace = pkg
     defaultConfig {
-        applicationId = pkg
+        applicationId = appId
         minSdk = 24
         versionCode = providers.gradleProperty("wireguardVersionCode").get().toInt()
         versionName = providers.gradleProperty("wireguardVersionName").get()
@@ -27,11 +30,25 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
+    // Release signing material is supplied only via the environment / CI secrets (never committed).
+    // When KEYSTORE_BASE64 is absent (local dev) the release build stays unsigned instead of failing.
+    val releaseSigningConfig = System.getenv("KEYSTORE_BASE64")?.takeIf { it.isNotBlank() }?.let { keystoreBase64 ->
+        signingConfigs.create("release") {
+            val keystoreFile = layout.buildDirectory.file("release-signing/release.jks").get().asFile
+            keystoreFile.parentFile.mkdirs()
+            keystoreFile.writeBytes(Base64.getMimeDecoder().decode(keystoreBase64))
+            storeFile = keystoreFile
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles("proguard-android-optimize.txt")
+            signingConfig = releaseSigningConfig
             packaging {
                 resources {
                     excludes += "DebugProbesKt.bin"
