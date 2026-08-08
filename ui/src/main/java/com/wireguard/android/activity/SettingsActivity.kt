@@ -4,6 +4,7 @@
  */
 package com.wireguard.android.activity
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +12,7 @@ import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.fragment.app.commit
@@ -23,6 +25,7 @@ import com.wireguard.android.R
 import com.wireguard.android.backend.WgQuickBackend
 import com.wireguard.android.preference.PreferencesPreferenceDataStore
 import com.wireguard.android.util.AdminKnobs
+import com.wireguard.android.util.ErrorMessages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,7 +67,11 @@ class SettingsActivity : AppCompatActivity() {
             preferenceScreen.initialExpandedChildrenCount = 6
 
             preferenceManager.findPreference<Preference>("about_fork")?.setOnPreferenceClickListener {
-                startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/danielealbano/wireguard-android".toUri()))
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/danielealbano/wireguard-android".toUri()))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(requireContext(), ErrorMessages[e], Toast.LENGTH_SHORT).show()
+                }
                 true
             }
 
