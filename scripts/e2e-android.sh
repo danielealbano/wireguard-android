@@ -13,7 +13,10 @@
 # live server reachable. VPN consent is pre-granted via the ACTIVATE_VPN appop.
 set -u
 
-PKG=com.wireguard.android.debug
+# Installed applicationId of the debug build (fork id + .debug suffix). The TestReceiver class name
+# stays com.wireguard.android.debug.TestReceiver (the source/namespace is unchanged), as do the
+# broadcast action strings below.
+PKG=com.danielealbano.wireguard.ws.debug
 RCV="$PKG/com.wireguard.android.debug.TestReceiver"
 LOG=/tmp/wireguard-android-e2e.log
 FULL_NAME=e2e-full
